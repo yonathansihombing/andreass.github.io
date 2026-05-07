@@ -1,0 +1,2847 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROS2 Live Coding Game</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --panel: #111827;
+    --card: #1a2235;
+    --border: #2a3a55;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --green: #00ff9d;
+    --red: #ff4757;
+    --yellow: #ffd32a;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --code-bg: #0d1117;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .app { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+  /* HEADER */
+  header {
+    text-align: center;
+    padding: 30px 20px 20px;
+    margin-bottom: 20px;
+  }
+  header h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 2px;
+  }
+  header p { color: var(--muted); margin-top: 8px; font-size: 0.9rem; }
+
+  /* PROGRESS BAR */
+  .progress-container {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .progress-label { font-family: 'Orbitron', monospace; font-size: 0.75rem; color: var(--accent); white-space: nowrap; }
+  .progress-bar-track { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 4px; transition: width 0.5s ease; }
+  .progress-score {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.8rem;
+    color: var(--yellow);
+    white-space: nowrap;
+  }
+
+  /* TOPIC TABS */
+  .topics-nav {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .topic-tab {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-family: 'JetBrains Mono', monospace;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .topic-tab:hover { border-color: var(--accent); color: var(--accent); }
+  .topic-tab.active { border-color: var(--accent); background: rgba(0,212,255,0.1); color: var(--accent); }
+  .topic-tab.completed { border-color: var(--green); color: var(--green); }
+  .topic-tab.locked { opacity: 0.4; cursor: not-allowed; }
+  .topic-tab .icon { font-size: 1rem; }
+
+  /* MAIN LAYOUT */
+  .main-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 768px) { .main-layout { grid-template-columns: 1fr; } }
+
+  /* PANEL */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--card);
+  }
+  .panel-header .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-red { background: #ff5f56; }
+  .dot-yellow { background: #ffbd2e; }
+  .dot-green { background: #27c93f; }
+  .panel-title { font-family: 'Orbitron', monospace; font-size: 0.7rem; color: var(--muted); letter-spacing: 1px; margin-left: 4px; }
+  .panel-body { padding: 20px; }
+
+  /* LESSON CONTENT */
+  .lesson-phase {
+    display: none;
+    animation: fadeIn 0.3s ease;
+  }
+  .lesson-phase.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  .phase-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-family: 'Orbitron', monospace;
+    margin-bottom: 16px;
+  }
+  .phase-explain { background: rgba(124,58,237,0.2); color: var(--accent2); border: 1px solid var(--accent2); }
+  .phase-example { background: rgba(0,212,255,0.15); color: var(--accent); border: 1px solid var(--accent); }
+  .phase-practice { background: rgba(0,255,157,0.15); color: var(--green); border: 1px solid var(--green); }
+  .phase-result { background: rgba(255,215,42,0.15); color: var(--yellow); border: 1px solid var(--yellow); }
+
+  .lesson-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+  .lesson-text { font-size: 0.875rem; color: #94a3b8; line-height: 1.8; margin-bottom: 16px; }
+  .lesson-text strong { color: var(--accent); }
+
+  /* CONCEPT CARDS */
+  .concept-card {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .concept-card h4 { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; margin-bottom: 6px; }
+  .concept-card p { font-size: 0.8rem; color: #94a3b8; line-height: 1.6; }
+
+  /* CODE DISPLAY */
+  .code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 12px 0;
+    overflow-x: auto;
+  }
+  .code-block pre {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    color: #e2e8f0;
+  }
+  /* Syntax highlighting */
+  .kw { color: #c678dd; }
+  .fn { color: #61afef; }
+  .st { color: #98c379; }
+  .cm { color: #5c6370; font-style: italic; }
+  .nb { color: #e5c07b; }
+  .op { color: #56b6c2; }
+
+  /* CODE EDITOR */
+  .code-editor {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 12px 0;
+  }
+  .editor-header {
+    padding: 8px 14px;
+    background: #161b2e;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .editor-filename { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--muted); }
+  .editor-lang { font-size: 0.65rem; color: var(--accent2); background: rgba(124,58,237,0.2); padding: 2px 8px; border-radius: 4px; }
+  .editor-lines {
+    display: flex;
+    min-height: 200px;
+  }
+  .line-nums {
+    padding: 14px 10px;
+    background: #0d1117;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    text-align: right;
+    min-width: 40px;
+    user-select: none;
+    border-right: 1px solid var(--border);
+    white-space: pre;
+    overflow: hidden;
+    align-self: stretch;
+  }
+  .code-textarea {
+    flex: 1;
+    padding: 14px;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #e2e8f0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    resize: none;
+    min-height: 200px;
+    tab-size: 4;
+  }
+  .code-textarea::placeholder { color: #3a4a66; }
+
+  /* BUTTONS */
+  .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-family: 'Orbitron', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 1px;
+    font-weight: 700;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), #0099cc); color: #000; }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,212,255,0.4); }
+  .btn-check { background: linear-gradient(135deg, var(--green), #00cc7a); color: #000; }
+  .btn-check:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,255,157,0.4); }
+  .btn-next { background: linear-gradient(135deg, var(--accent2), #5b21b6); color: #fff; }
+  .btn-next:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(124,58,237,0.4); }
+  .btn-reset { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-reset:hover { border-color: var(--yellow); color: var(--yellow); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+  /* FEEDBACK */
+  .feedback-box {
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 12px 0;
+    font-size: 0.82rem;
+    line-height: 1.7;
+    display: none;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+  .feedback-box.show { display: block; }
+  .feedback-correct {
+    background: rgba(0,255,157,0.08);
+    border: 1px solid var(--green);
+    color: var(--green);
+  }
+  .feedback-wrong {
+    background: rgba(255,71,87,0.08);
+    border: 1px solid var(--red);
+    color: #fca5a5;
+  }
+  .feedback-warning {
+    background: rgba(255,211,42,0.08);
+    border: 1px solid var(--yellow);
+    color: var(--yellow);
+  }
+
+  .error-detail {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: #fca5a5;
+  }
+  .error-detail span.fixed { color: var(--green); }
+
+  /* SCORE POP */
+  .score-pop {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    background: linear-gradient(135deg, #1a2235, #0d1117);
+    border: 2px solid var(--green);
+    border-radius: 16px;
+    padding: 30px 50px;
+    text-align: center;
+    z-index: 1000;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  .score-pop.show { transform: translate(-50%, -50%) scale(1); }
+  .score-pop h2 { font-family: 'Orbitron', monospace; font-size: 2rem; color: var(--green); }
+  .score-pop p { color: var(--muted); margin-top: 8px; }
+
+  /* HINT */
+  .hint-toggle { 
+    font-size: 0.75rem; color: var(--yellow); cursor: pointer; 
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(255,211,42,0.08); border: 1px solid rgba(255,211,42,0.3);
+    padding: 4px 10px; border-radius: 6px; margin-bottom: 10px;
+  }
+  .hint-content {
+    background: rgba(255,211,42,0.05);
+    border-left: 3px solid var(--yellow);
+    padding: 10px 14px;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.8rem;
+    color: #94a3b8;
+    display: none;
+    margin-bottom: 10px;
+  }
+  .hint-content.show { display: block; }
+
+  /* CHECKLIST */
+  .checklist { list-style: none; margin: 12px 0; }
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.82rem;
+    color: #94a3b8;
+  }
+  .checklist li::before { content: '○'; color: var(--muted); margin-top: 1px; }
+  .checklist li.ok::before { content: '✓'; color: var(--green); }
+  .checklist li.fail::before { content: '✗'; color: var(--red); }
+
+  /* LOADING */
+  .loading {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    color: var(--accent);
+    font-size: 0.8rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .loading.show { display: flex; }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* TERMINAL OUTPUT */
+  .terminal-panel {
+    background: #060a10;
+    border: 1px solid #1a3a1a;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 14px 0;
+    display: none;
+  }
+  .terminal-panel.show { display: block; }
+  .terminal-header {
+    background: #0d1a0d;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #1a3a1a;
+  }
+  .terminal-header .dot-t { width: 9px; height: 9px; border-radius: 50%; }
+  .terminal-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    color: #3a6e3a;
+    letter-spacing: 1px;
+    flex: 1;
+  }
+  .terminal-running {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: #00ff9d;
+  }
+  .terminal-running.show { display: flex; }
+  .terminal-blink {
+    width: 6px; height: 6px;
+    background: #00ff9d;
+    border-radius: 50%;
+    animation: blink 0.8s ease infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  .terminal-body {
+    padding: 14px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    line-height: 1.8;
+    min-height: 80px;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .t-line { display: flex; gap: 8px; align-items: baseline; }
+  .t-prefix { color: #2d5a2d; user-select: none; white-space: nowrap; }
+  .t-text { color: #7ee787; }
+  .t-text.t-warn { color: #ffd32a; }
+  .t-text.t-err  { color: #ff6b6b; }
+  .t-text.t-info { color: #79c0ff; }
+  .t-text.t-sys  { color: #8b949e; }
+  .t-text.t-node { color: #56d364; font-weight: 600; }
+  .t-error-block {
+    background: rgba(255,71,87,0.06);
+    border: 1px solid rgba(255,71,87,0.3);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin: 8px 0;
+    color: #ff8080;
+    font-size: 0.73rem;
+    line-height: 1.8;
+  }
+  .t-error-block .t-err-type {
+    color: #ff4757;
+    font-weight: 700;
+    font-size: 0.78rem;
+    margin-bottom: 4px;
+  }
+  .t-error-block .t-err-line {
+    background: rgba(255,71,87,0.12);
+    border-left: 3px solid #ff4757;
+    padding: 6px 10px;
+    border-radius: 0 4px 4px 0;
+    margin: 6px 0;
+    color: #fca5a5;
+  }
+  .t-error-block .t-err-fix {
+    color: #ffd32a;
+    margin-top: 6px;
+  }
+  .btn-run {
+    background: linear-gradient(135deg, #00ff9d, #00cc7a);
+    color: #000;
+    font-weight: 700;
+  }
+  .btn-run:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,255,157,0.5); }
+  .btn-run:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+  .btn-run.running {
+    background: linear-gradient(135deg, #1a3a2a, #0d2a1a);
+    color: #00ff9d;
+    border: 1px solid #00ff9d;
+  }
+
+  /* RIGHT PANEL - INFO */
+  .info-panel { display: flex; flex-direction: column; gap: 16px; }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+  }
+  .stat-value { font-family: 'Orbitron', monospace; font-size: 1.4rem; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
+
+  .topics-list { list-style: none; }
+  .topics-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+  }
+  .topics-list li:last-child { border-bottom: none; }
+  .topic-status { font-size: 0.7rem; }
+  .status-done { color: var(--green); }
+  .status-current { color: var(--yellow); }
+  .status-pending { color: var(--muted); }
+
+  /* OVERLAY */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999; }
+  .overlay.show { display: block; }
+
+  /* Hide right panel → lesson goes full width */
+  .info-panel.hidden { display: none; }
+  .main-layout.full-width { grid-template-columns: 1fr; }
+
+  /* KAMUS KODE MODAL */
+  .kamus-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  .kamus-modal.show { display: flex; }
+  .kamus-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 2001;
+  }
+  .kamus-box {
+    position: relative;
+    z-index: 2002;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 780px;
+    margin: auto;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  .kamus-head {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .kamus-head h2 {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.9rem;
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+  .kamus-close {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 1.2rem; padding: 4px 8px;
+    border-radius: 6px; transition: all 0.2s;
+  }
+  .kamus-close:hover { color: var(--red); background: rgba(255,71,87,0.1); }
+  .kamus-body { padding: 20px 22px; max-height: 80vh; overflow-y: auto; }
+  .kamus-search {
+    width: 100%;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    margin-bottom: 16px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .kamus-search:focus { border-color: var(--accent); }
+  .kamus-section-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.65rem;
+    color: var(--accent2);
+    letter-spacing: 2px;
+    margin: 18px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .kamus-item {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .kamus-item:hover { border-color: var(--accent); }
+  .kamus-item-head {
+    padding: 12px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .kamus-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    padding: 4px 10px;
+    border-radius: 6px;
+    flex: 1;
+    word-break: break-all;
+  }
+  .kamus-arrow { color: var(--muted); font-size: 0.7rem; transition: transform 0.2s; }
+  .kamus-item.open .kamus-arrow { transform: rotate(90deg); }
+  .kamus-detail {
+    display: none;
+    padding: 0 14px 14px;
+    border-top: 1px solid var(--border);
+  }
+  .kamus-item.open .kamus-detail { display: block; }
+  .kamus-detail-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 10px 0 6px;
+  }
+  .kamus-detail-text {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    line-height: 1.8;
+  }
+  .kamus-detail-text strong { color: var(--accent); }
+  .kamus-analogy {
+    margin-top: 10px;
+    background: rgba(124,58,237,0.08);
+    border-left: 3px solid var(--accent2);
+    border-radius: 0 6px 6px 0;
+    padding: 8px 12px;
+    font-size: 0.78rem;
+    color: #a78bfa;
+    line-height: 1.7;
+  }
+  .kamus-analogy::before { content: '💡 Analogi: '; font-weight: 600; }
+  .kamus-example-code {
+    margin-top: 10px;
+    background: #060a10;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.73rem;
+    color: #98c379;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .kamus-tag {
+    font-size: 0.62rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap;
+  }
+  .tag-wajib { background: rgba(255,71,87,0.15); color: #ff6b6b; border: 1px solid rgba(255,71,87,0.3); }
+  .tag-penting { background: rgba(0,212,255,0.1); color: var(--accent); border: 1px solid rgba(0,212,255,0.3); }
+  .tag-opsional { background: rgba(0,255,157,0.08); color: var(--green); border: 1px solid rgba(0,255,157,0.3); }
+
+  /* Annotated code in example phase */
+  .anno-code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 12px 0;
+  }
+  .anno-line {
+    display: flex;
+    align-items: stretch;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+  .anno-line:last-child { border-bottom: none; }
+  .anno-line:hover { background: rgba(0,212,255,0.05); }
+  .anno-line.has-note:hover { background: rgba(0,212,255,0.08); }
+  .anno-line.active-note { background: rgba(0,212,255,0.1); border-left: 2px solid var(--accent); }
+  .anno-ln {
+    padding: 4px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    min-width: 36px;
+    text-align: right;
+    user-select: none;
+    background: #0d1117;
+    border-right: 1px solid var(--border);
+  }
+  .anno-code {
+    padding: 4px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.76rem;
+    line-height: 1.6;
+    flex: 1;
+    white-space: pre;
+  }
+  .anno-icon {
+    padding: 4px 10px;
+    font-size: 0.65rem;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.2s;
+    align-self: center;
+  }
+  .anno-line.has-note .anno-icon { opacity: 0.5; }
+  .anno-line.has-note:hover .anno-icon,
+  .anno-line.active-note .anno-icon { opacity: 1; }
+  .anno-explanation {
+    display: none;
+    background: rgba(0,212,255,0.06);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 4px 0 8px;
+    font-size: 0.8rem;
+    line-height: 1.8;
+    color: #94a3b8;
+    animation: slideIn 0.2s ease;
+  }
+  .anno-explanation.show { display: block; }
+  .anno-explanation strong { color: var(--accent); }
+  .anno-explanation .anno-ana {
+    margin-top: 8px;
+    color: #a78bfa;
+    font-size: 0.77rem;
+    border-left: 2px solid var(--accent2);
+    padding-left: 8px;
+  }
+  .anno-hint-bar {
+    padding: 8px 14px;
+    background: rgba(0,212,255,0.04);
+    border-top: 1px solid var(--border);
+    font-size: 0.68rem;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .btn-kamus {
+    background: rgba(124,58,237,0.15);
+    color: var(--accent2);
+    border: 1px solid rgba(124,58,237,0.4);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    font-family: 'Orbitron', monospace;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+  }
+  .btn-kamus:hover { background: rgba(124,58,237,0.3); border-color: var(--accent2); }
+</style>
+</head>
+<body>
+
+<!-- KAMUS MODAL -->
+<div class="kamus-modal" id="kamusModal">
+  <div class="kamus-overlay" onclick="closeKamus()"></div>
+  <div class="kamus-box">
+    <div class="kamus-head">
+      <h2>📚 KAMUS KODE ROS2</h2>
+      <button class="kamus-close" onclick="closeKamus()">✕</button>
+    </div>
+    <div class="kamus-body" id="kamusBody">
+      <input class="kamus-search" id="kamusSearch" placeholder="🔍 Cari sintaks... (contoh: import, class, spin)" oninput="filterKamus(this.value)">
+      <div id="kamusContent"></div>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <!-- Header -->
+  <header>
+    <h1>🤖 ROS2 LIVE CODING GAME</h1>
+    <p>Belajar Robot Operating System 2 dengan cara praktik langsung — RE402 Robotics Engineering</p>
+    <div style="margin-top:12px">
+      <button class="btn-kamus" onclick="openKamus()">📚 KAMUS KODE ROS2</button>
+    </div>
+  </header>
+
+  <!-- Progress -->
+  <div class="progress-container">
+    <span class="progress-label">PROGRESS</span>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progressFill" style="width: 0%"></div>
+    </div>
+    <span class="progress-score" id="scoreDisplay">⭐ 0 / 600 pts</span>
+  </div>
+
+  <!-- Topic Tabs -->
+  <div class="topics-nav" id="topicsNav">
+    <button class="topic-tab active" data-topic="0" onclick="switchTopic(0)"><span class="icon">🔵</span> Node</button>
+    <button class="topic-tab locked" data-topic="1"><span class="icon">📢</span> Topic</button>
+    <button class="topic-tab locked" data-topic="2"><span class="icon">⚙️</span> Parameter</button>
+    <button class="topic-tab locked" data-topic="3"><span class="icon">🔧</span> Service</button>
+    <button class="topic-tab locked" data-topic="4"><span class="icon">🎯</span> Action</button>
+    <button class="topic-tab locked" data-topic="5"><span class="icon">📡</span> Sensor Gazebo</button>
+    <button class="topic-tab locked" data-topic="6"><span class="icon">🦾</span> Actuator Gazebo</button>
+  </div>
+
+  <!-- Main Layout -->
+  <div class="main-layout">
+    <!-- LEFT: Lesson Panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="dot dot-red"></div>
+        <div class="dot dot-yellow"></div>
+        <div class="dot dot-green"></div>
+        <span class="panel-title" id="panelTitle">LESSON</span>
+      </div>
+      <div class="panel-body" id="lessonBody">
+        <!-- Lesson content injected here -->
+      </div>
+    </div>
+
+    <!-- RIGHT: Info Panel -->
+    <div class="info-panel" id="infoPanelRight">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="dot dot-red"></div>
+          <div class="dot dot-yellow"></div>
+          <div class="dot dot-green"></div>
+          <span class="panel-title">STATS</span>
+        </div>
+        <div class="panel-body">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-value" id="statTopics">0/7</div>
+              <div class="stat-label">TOPICS DONE</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="statScore" style="color: var(--yellow)">0</div>
+              <div class="stat-label">TOTAL SCORE</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="statAttempts" style="color: var(--accent2)">0</div>
+              <div class="stat-label">ATTEMPTS</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="statPhase" style="color: var(--green)">—</div>
+              <div class="stat-label">PHASE</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="dot dot-red"></div>
+          <div class="dot dot-yellow"></div>
+          <div class="dot dot-green"></div>
+          <span class="panel-title">ROADMAP</span>
+        </div>
+        <div class="panel-body">
+          <ul class="topics-list" id="roadmapList"></ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="dot dot-red"></div>
+          <div class="dot dot-yellow"></div>
+          <div class="dot dot-green"></div>
+          <span class="panel-title">💡 TIPS</span>
+        </div>
+        <div class="panel-body">
+          <div style="font-size:0.82rem; color:#94a3b8; line-height:1.8;" id="tipBox">
+            Setiap topik punya 4 fase:<br>
+            <strong style="color:var(--accent2)">📖 Explain</strong> → <strong style="color:var(--accent)">💻 Contoh</strong> → <strong style="color:var(--green)">✍️ Praktek</strong> → <strong style="color:var(--yellow)">✅ Analisis</strong><br><br>
+            Ketik kode dari awal, tekan <strong style="color:var(--green)">CEK KODE</strong> untuk melihat hasilnya!
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Score Popup -->
+<div class="overlay" id="overlay"></div>
+<div class="score-pop" id="scorePop">
+  <div style="font-size:2.5rem; margin-bottom:10px">🎉</div>
+  <h2 id="scorePopTitle">BENAR!</h2>
+  <p id="scorePopMsg">+100 poin</p>
+  <button class="btn btn-next" onclick="closeScorePop()" style="margin-top:20px">LANJUT →</button>
+</div>
+
+<script>
+// ============================
+// DATA: Topics & Content
+// ============================
+const TOPICS = [
+  {
+    id: 0,
+    name: "ROS2 Node",
+    icon: "🔵",
+    points: 100,
+    explain: {
+      title: "Apa itu ROS2 Node?",
+      content: `<p class="lesson-text">
+        <strong>Node</strong> adalah unit eksekusi terkecil dalam ROS2. 
+        Setiap node adalah sebuah proses yang menjalankan satu fungsi tertentu — 
+        seperti membaca sensor, memproses data, atau menggerakkan motor.
+      </p>
+      <div class="concept-card">
+        <h4>📌 Analogi Node</h4>
+        <p>Bayangkan robot sebagai sebuah tim kerja. Setiap anggota tim (node) punya tugas spesifik: 
+        satu orang baca kamera, satu proses gambar, satu gerakkan roda. Mereka bekerja bersama tapi terpisah.</p>
+      </div>
+      <div class="concept-card">
+        <h4>🔑 Konsep Penting</h4>
+        <p>• Node dibuat dengan class yang inherit dari <strong>rclpy.node.Node</strong><br>
+        • Setiap node punya nama unik<br>
+        • Node diinisialisasi dengan <strong>rclpy.init()</strong><br>
+        • Node dijalankan dengan <strong>rclpy.spin()</strong></p>
+      </div>`,
+    },
+    example: {
+      title: "Contoh Node Pertama",
+      code: `import rclpy
+from rclpy.node import Node
+
+class MyFirstNode(Node):
+    def __init__(self):
+        # Inisialisasi node dengan nama 'hello_node'
+        super().__init__('hello_node')
+        self.get_logger().info('Halo dari Node!')
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = MyFirstNode()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()`,
+      explanation: `Program ini membuat node bernama <strong>hello_node</strong>. Saat dijalankan, node mencetak 
+      "Halo dari Node!" ke terminal. <strong>rclpy.spin()</strong> membuat node tetap hidup sampai Ctrl+C.
+      <div style="margin-top:14px; border:1px solid #2a3a55; border-radius:10px; overflow:hidden;">
+        <div style="background:#161b2e; padding:8px 14px; font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:#7c3aed; letter-spacing:1px;">
+          💡 KONSEP TAMBAHAN — Pakai kalau butuh
+        </div>
+        <div style="padding:14px; display:flex; flex-direction:column; gap:12px;">
+          <div style="background:#0d1117; border-left:3px solid #00d4ff; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#00d4ff; margin-bottom:6px;">⏱ Timer — jalankan sesuatu setiap N detik</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;">self.create_timer(1.0, self.timer_callback)
+
+def timer_callback(self):
+    self.get_logger().info('Dipanggil tiap 1 detik')</pre>
+            <div style="font-size:0.75rem; color:#64748b; margin-top:6px;">→ Angka pertama = interval detik. Fungsi callback dipanggil otomatis.</div>
+          </div>
+          <div style="background:#0d1117; border-left:3px solid #98c379; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#98c379; margin-bottom:6px;">📝 Logger — cetak pesan ke terminal</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;">self.get_logger().info('pesan biasa')
+self.get_logger().warn('peringatan')
+self.get_logger().error('error!')</pre>
+          </div>
+        </div>
+      </div>`
+    },
+    practice: {
+      title: "Praktek: Buat Node dengan Timer",
+      instruction: `Buat node bernama <strong>'my_robot_node'</strong> yang menampilkan pesan 
+      <strong>'Robot berjalan...'</strong> setiap <strong>1 detik</strong> menggunakan timer.<br><br>
+      Ketik <strong>seluruh kode Python</strong> dari awal:`,
+      hint: `Gunakan self.create_timer(1.0, callback_function) untuk membuat timer.\nCallback adalah fungsi yang dipanggil setiap 1 detik.`,
+      filename: "my_node.py",
+      checks: [
+        { label: "import rclpy", test: (c) => c.includes('import rclpy') },
+        { label: "import Node dari rclpy.node", test: (c) => c.includes('from rclpy.node import Node') },
+        { label: "Class inherit dari Node", test: (c) => /class\s+\w+\s*\(\s*Node\s*\)/.test(c) },
+        { label: "super().__init__('my_robot_node')", test: (c) => c.includes("'my_robot_node'") || c.includes('"my_robot_node"') },
+        { label: "create_timer(1.0, ...)", test: (c) => /create_timer\s*\(\s*1/.test(c) },
+        { label: "get_logger().info('Robot berjalan...')", test: (c) => c.includes('Robot berjalan') },
+        { label: "rclpy.spin() dipanggil", test: (c) => c.includes('rclpy.spin') },
+      ],
+      solution: `import rclpy
+from rclpy.node import Node
+
+class MyRobotNode(Node):
+    def __init__(self):
+        super().__init__('my_robot_node')
+        self.create_timer(1.0, self.timer_callback)
+
+    def timer_callback(self):
+        self.get_logger().info('Robot berjalan...')
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = MyRobotNode()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()`
+    }
+  },
+  {
+    id: 1,
+    name: "ROS2 Topic",
+    icon: "📢",
+    points: 100,
+    explain: {
+      title: "Apa itu ROS2 Topic?",
+      content: `<p class="lesson-text">
+        <strong>Topic</strong> adalah channel komunikasi <strong>publish-subscribe</strong> antar node.
+        Node <strong>Publisher</strong> mengirim data, node <strong>Subscriber</strong> menerima data.
+        Komunikasi bersifat <strong>asynchronous</strong> dan <strong>many-to-many</strong>.
+      </p>
+      <div class="concept-card">
+        <h4>📡 Analogi Topic</h4>
+        <p>Seperti siaran radio: stasiun radio (publisher) broadcast lagu, banyak pendengar (subscriber) bisa mendengarkan. 
+        Pendengar tidak perlu tahu siapa yang broadcast.</p>
+      </div>
+      <div class="concept-card">
+        <h4>🔑 Konsep Penting</h4>
+        <p>• Publisher: <strong>create_publisher(MsgType, '/topic_name', qos)</strong><br>
+        • Subscriber: <strong>create_subscription(MsgType, '/topic_name', callback, qos)</strong><br>
+        • Message type dari package <strong>std_msgs</strong> atau <strong>sensor_msgs</strong><br>
+        • QoS (Quality of Service) mengatur keandalan pesan</p>
+      </div>`,
+    },
+    example: {
+      title: "Contoh Publisher & Subscriber",
+      code: `import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+# --- PUBLISHER ---
+class TalkerNode(Node):
+    def __init__(self):
+        super().__init__('talker')
+        self.pub = self.create_publisher(String, '/chatter', 10)
+        self.create_timer(1.0, self.publish_msg)
+        self.count = 0
+
+    def publish_msg(self):
+        msg = String()
+        msg.data = f'Hello #{self.count}'
+        self.pub.publish(msg)
+        self.count += 1
+
+# --- SUBSCRIBER ---
+class ListenerNode(Node):
+    def __init__(self):
+        super().__init__('listener')
+        self.create_subscription(
+            String, '/chatter', self.callback, 10)
+
+    def callback(self, msg):
+        self.get_logger().info(f'Diterima: {msg.data}')`,
+      explanation: `<strong>TalkerNode</strong> publish String ke topic <strong>/chatter</strong> setiap detik.
+      <strong>ListenerNode</strong> subscribe ke topic yang sama dan mencetak setiap pesan yang diterima.
+      Angka <strong>10</strong> adalah ukuran queue QoS.
+      <div style="margin-top:14px; border:1px solid #2a3a55; border-radius:10px; overflow:hidden;"><div style="background:#161b2e; padding:8px 14px; font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:#7c3aed; letter-spacing:1px;">💡 KONSEP TAMBAHAN — Pakai kalau butuh</div><div style="padding:14px; display:flex; flex-direction:column; gap:12px;">
+          <div style="background:#0d1117; border-left:3px solid #00d4ff; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#00d4ff; margin-bottom:6px;">📦 Tipe pesan lain yang bisa dipakai</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;">from std_msgs.msg import String   # teks
+from std_msgs.msg import Float64  # angka desimal
+from std_msgs.msg import Int32    # angka bulat
+from std_msgs.msg import Bool     # True/False</pre>
+            <div style='font-size:0.75rem; color:#64748b; margin-top:6px;'>→ Pilih sesuai data yang dikirim</div>
+          </div>
+          <div style="background:#0d1117; border-left:3px solid #ffd32a; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#ffd32a; margin-bottom:6px;">⚙️ QoS — atur keandalan pengiriman pesan</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;">self.create_publisher(String, '/topic', 10)
+#                                         ^
+# angka ini = ukuran antrian (queue size)
+# makin besar makin banyak pesan yang disimpan</pre>
+            <div style='font-size:0.75rem; color:#64748b; margin-top:6px;'>→ Pakai 10 untuk kebanyakan kasus</div>
+          </div></div></div>`
+    },
+    practice: {
+      title: "Praktek: Publisher Sensor Suhu",
+      instruction: `Buat node <strong>'temperature_publisher'</strong> yang publish data suhu ke topic 
+      <strong>'/temperature'</strong> menggunakan pesan tipe <strong>Float64</strong> dari std_msgs 
+      setiap <strong>2 detik</strong>. Nilai suhu bebas (misal 36.5).<br><br>
+      Ketik <strong>seluruh kode Python</strong> dari awal:`,
+      hint: `from std_msgs.msg import Float64\nGunakan msg.data = 36.5 untuk set nilai.\nQoS queue size bisa 10.`,
+      filename: "temperature_pub.py",
+      checks: [
+        { label: "import rclpy & Node", test: (c) => c.includes('import rclpy') && c.includes('from rclpy.node import Node') },
+        { label: "import Float64 dari std_msgs", test: (c) => c.includes('Float64') && c.includes('std_msgs') },
+        { label: "Nama node 'temperature_publisher'", test: (c) => c.includes('temperature_publisher') },
+        { label: "create_publisher(Float64, '/temperature', ...)", test: (c) => c.includes("'/temperature'") || c.includes('"/temperature"') },
+        { label: "create_timer(2.0, ...)", test: (c) => /create_timer\s*\(\s*2/.test(c) },
+        { label: "msg.data diisi nilai float", test: (c) => /msg\.data\s*=\s*[\d.]+/.test(c) },
+        { label: "publisher.publish(msg)", test: (c) => /\.publish\s*\(\s*msg\s*\)/.test(c) },
+      ],
+      solution: `import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Float64
+
+class TemperaturePublisher(Node):
+    def __init__(self):
+        super().__init__('temperature_publisher')
+        self.pub = self.create_publisher(Float64, '/temperature', 10)
+        self.create_timer(2.0, self.timer_callback)
+
+    def timer_callback(self):
+        msg = Float64()
+        msg.data = 36.5
+        self.pub.publish(msg)
+        self.get_logger().info(f'Suhu: {msg.data}')
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = TemperaturePublisher()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()`
+    }
+  },
+  {
+    id: 2,
+    name: "Parameter",
+    icon: "⚙️",
+    points: 100,
+    explain: {
+      title: "Apa itu ROS2 Parameter?",
+      content: `<p class="lesson-text">
+        <strong>Parameter</strong> adalah nilai konfigurasi yang bisa diset/diubah dari luar node 
+        tanpa mengubah source code. Parameter bisa diakses via terminal atau launch file.
+      </p>
+      <div class="concept-card">
+        <h4>📌 Analogi Parameter</h4>
+        <p>Seperti pengaturan di aplikasi (volume, brightness). Kamu bisa ubah tanpa perlu "rebuild" aplikasinya.</p>
+      </div>
+      <div class="concept-card">
+        <h4>🔑 Konsep Penting</h4>
+        <p>• Deklarasi: <strong>self.declare_parameter('nama', default_value)</strong><br>
+        • Baca nilai: <strong>self.get_parameter('nama').value</strong><br>
+        • Diset dari luar: <strong>ros2 param set /node_name /param value</strong><br>
+        • Bisa berubah saat runtime!</p>
+      </div>`,
+    },
+    example: {
+      title: "Contoh Penggunaan Parameter",
+      code: `import rclpy
+from rclpy.node import Node
+
+class RobotConfig(Node):
+    def __init__(self):
+        super().__init__('robot_config')
+        
+        # Deklarasi parameter dengan default value
+        self.declare_parameter('robot_name', 'RoboX')
+        self.declare_parameter('max_speed', 1.5)
+        self.declare_parameter('debug_mode', False)
+        
+        # Baca nilai parameter
+        name = self.get_parameter('robot_name').value
+        speed = self.get_parameter('max_speed').value
+        
+        self.get_logger().info(
+            f'Robot: {name} | Max Speed: {speed} m/s')`,
+      explanation: `Node mendeklarasikan 3 parameter: <strong>robot_name</strong> (string), 
+      <strong>max_speed</strong> (float), dan <strong>debug_mode</strong> (bool).
+      Nilai bisa diubah dari terminal: <code>ros2 param set /robot_config robot_name MyBot</code>
+      <div style="margin-top:14px; border:1px solid #2a3a55; border-radius:10px; overflow:hidden;"><div style="background:#161b2e; padding:8px 14px; font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:#7c3aed; letter-spacing:1px;">💡 KONSEP TAMBAHAN — Pakai kalau butuh</div><div style="padding:14px; display:flex; flex-direction:column; gap:12px;">
+          <div style="background:#0d1117; border-left:3px solid #00d4ff; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#00d4ff; margin-bottom:6px;">📋 Tipe data parameter yang didukung</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;">self.declare_parameter('nama',  'teks')   # string
+self.declare_parameter('speed', 1.5)      # float
+self.declare_parameter('jumlah', 10)      # integer
+self.declare_parameter('aktif', True)     # boolean</pre>
+            <div style='font-size:0.75rem; color:#64748b; margin-top:6px;'>→ Tipe otomatis terdeteksi dari default value</div>
+          </div>
+          <div style="background:#0d1117; border-left:3px solid #00ff9d; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#00ff9d; margin-bottom:6px;">🔄 Baca parameter di dalam callback/timer</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;">def timer_callback(self):
+    speed = self.get_parameter('speed').value
+    self.get_logger().info(f'Speed: {speed}')</pre>
+            <div style='font-size:0.75rem; color:#64748b; margin-top:6px;'>→ Bisa dibaca kapan saja, tidak hanya di __init__</div>
+          </div></div></div>`
+    },
+    practice: {
+      title: "Praktek: Node dengan Parameter Kecepatan",
+      instruction: `Buat node <strong>'motor_controller'</strong> dengan 2 parameter:<br>
+      - <strong>'speed'</strong> dengan nilai default <strong>0.5</strong><br>
+      - <strong>'direction'</strong> dengan nilai default <strong>'forward'</strong><br>
+      Cetak kedua parameter menggunakan logger.<br><br>
+      Ketik <strong>seluruh kode Python</strong> dari awal:`,
+      hint: `Gunakan self.declare_parameter() untuk setiap parameter.\nGunakan self.get_parameter('nama').value untuk membaca nilai.`,
+      filename: "motor_controller.py",
+      checks: [
+        { label: "import rclpy & Node", test: (c) => c.includes('import rclpy') && c.includes('from rclpy.node import Node') },
+        { label: "Nama node 'motor_controller'", test: (c) => c.includes('motor_controller') },
+        { label: "declare_parameter('speed', 0.5)", test: (c) => c.includes("'speed'") && /0\.5/.test(c) },
+        { label: "declare_parameter('direction', 'forward')", test: (c) => c.includes("'direction'") && c.includes('forward') },
+        { label: "get_parameter('speed').value", test: (c) => c.includes("get_parameter") && c.includes('speed') },
+        { label: "get_parameter('direction').value", test: (c) => c.includes("get_parameter") && c.includes('direction') },
+        { label: "get_logger().info(...) dipanggil", test: (c) => c.includes('get_logger') },
+      ],
+      solution: `import rclpy
+from rclpy.node import Node
+
+class MotorController(Node):
+    def __init__(self):
+        super().__init__('motor_controller')
+        
+        self.declare_parameter('speed', 0.5)
+        self.declare_parameter('direction', 'forward')
+        
+        speed = self.get_parameter('speed').value
+        direction = self.get_parameter('direction').value
+        
+        self.get_logger().info(f'Speed: {speed} m/s')
+        self.get_logger().info(f'Direction: {direction}')
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = MotorController()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()`
+    }
+  },
+  {
+    id: 3,
+    name: "Service",
+    icon: "🔧",
+    points: 100,
+    explain: {
+      title: "Apa itu ROS2 Service?",
+      content: `<p class="lesson-text">
+        <strong>Service</strong> adalah komunikasi <strong>request-response</strong> antar node.
+        Berbeda dengan topic (satu arah), service bersifat <strong>synchronous</strong>: 
+        client kirim request, server proses, lalu kirim response balik.
+      </p>
+      <div class="concept-card">
+        <h4>📌 Analogi Service</h4>
+        <p>Seperti pesan ke kasir: kamu pesan kopi (request), kasir buatkan dan beri ke kamu (response). 
+        Ada interaksi dua arah yang terkoordinasi.</p>
+      </div>
+      <div class="concept-card">
+        <h4>🔑 Konsep Penting</h4>
+        <p>• Server: <strong>create_service(SrvType, '/srv_name', callback)</strong><br>
+        • Client: <strong>create_client(SrvType, '/srv_name')</strong><br>
+        • Service type punya <strong>Request</strong> dan <strong>Response</strong><br>
+        • Gunakan <strong>std_srvs.srv.SetBool</strong> untuk on/off</p>
+      </div>`,
+    },
+    example: {
+      title: "Contoh Service Server & Client",
+      code: `import rclpy
+from rclpy.node import Node
+from std_srvs.srv import SetBool
+
+# --- SERVICE SERVER ---
+class LedServer(Node):
+    def __init__(self):
+        super().__init__('led_server')
+        self.srv = self.create_service(
+            SetBool, '/set_led', self.handle_request)
+
+    def handle_request(self, request, response):
+        if request.data:
+            self.get_logger().info('LED ON')
+            response.success = True
+            response.message = 'LED dinyalakan'
+        else:
+            self.get_logger().info('LED OFF')
+            response.success = True
+            response.message = 'LED dimatikan'
+        return response`,
+      explanation: `<strong>LedServer</strong> membuat service <strong>/set_led</strong> yang menerima 
+      boolean (True/On atau False/Off). Server menerima request, proses, dan mengembalikan response berisi 
+      <strong>success</strong> dan <strong>message</strong>.
+      <div style="margin-top:14px; border:1px solid #2a3a55; border-radius:10px; overflow:hidden;"><div style="background:#161b2e; padding:8px 14px; font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:#7c3aed; letter-spacing:1px;">💡 KONSEP TAMBAHAN — Pakai kalau butuh</div><div style="padding:14px; display:flex; flex-direction:column; gap:12px;">
+          <div style="background:#0d1117; border-left:3px solid #00d4ff; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#00d4ff; margin-bottom:6px;">📋 Tipe service yang tersedia di std_srvs</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;">from std_srvs.srv import SetBool   # request: bool, response: success+msg
+from std_srvs.srv import Empty      # tidak ada data, hanya trigger
+from std_srvs.srv import Trigger    # response: success+message</pre>
+            <div style='font-size:0.75rem; color:#64748b; margin-top:6px;'>→ SetBool paling sering dipakai untuk on/off</div>
+          </div>
+          <div style="background:#0d1117; border-left:3px solid #ffd32a; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#ffd32a; margin-bottom:6px;">⚠️ Aturan wajib callback service</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;">def handle_request(self, request, response):
+    # ... proses request ...
+    response.success = True
+    response.message = "Berhasil"
+    return response   # ← WAJIB! Jangan lupa ini</pre>
+            <div style='font-size:0.75rem; color:#64748b; margin-top:6px;'>→ Tanpa return response, service akan hang/tidak merespons</div>
+          </div></div></div>`
+    },
+    practice: {
+      title: "Praktek: Service Server Reset Counter",
+      instruction: `Buat service server bernama node <strong>'counter_server'</strong> yang:<br>
+      - Service name: <strong>'/reset_counter'</strong><br>
+      - Tipe: <strong>std_srvs.srv.SetBool</strong><br>
+      - Jika request.data = True → response.success = True, response.message = 'Counter direset'<br>
+      - Jika request.data = False → response.success = False, response.message = 'Tidak direset'<br><br>
+      Ketik <strong>seluruh kode Python</strong> dari awal:`,
+      hint: `Gunakan SetBool dari std_srvs.srv.\nCallback punya parameter (self, request, response).\nSelalu return response di akhir callback.`,
+      filename: "counter_server.py",
+      checks: [
+        { label: "import rclpy & Node", test: (c) => c.includes('import rclpy') && c.includes('from rclpy.node import Node') },
+        { label: "import SetBool dari std_srvs.srv", test: (c) => c.includes('SetBool') && c.includes('std_srvs') },
+        { label: "Nama node 'counter_server'", test: (c) => c.includes('counter_server') },
+        { label: "create_service(SetBool, '/reset_counter', ...)", test: (c) => c.includes("'/reset_counter'") || c.includes('"/reset_counter"') },
+        { label: "response.success = True saat request.data", test: (c) => c.includes('response.success') && c.includes('True') },
+        { label: "response.message diisi", test: (c) => c.includes('response.message') && c.includes('Counter direset') },
+        { label: "return response di callback", test: (c) => c.includes('return response') },
+      ],
+      solution: `import rclpy
+from rclpy.node import Node
+from std_srvs.srv import SetBool
+
+class CounterServer(Node):
+    def __init__(self):
+        super().__init__('counter_server')
+        self.srv = self.create_service(
+            SetBool, '/reset_counter', self.handle_request)
+
+    def handle_request(self, request, response):
+        if request.data:
+            response.success = True
+            response.message = 'Counter direset'
+            self.get_logger().info('Counter direset!')
+        else:
+            response.success = False
+            response.message = 'Tidak direset'
+            self.get_logger().info('Tidak ada reset.')
+        return response
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = CounterServer()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()`
+    }
+  },
+  {
+    id: 4,
+    name: "Action",
+    icon: "🎯",
+    points: 100,
+    explain: {
+      title: "Apa itu ROS2 Action?",
+      content: `<p class="lesson-text">
+        <strong>Action</strong> adalah komunikasi untuk <strong>long-running tasks</strong>.
+        Gabungan topic + service: client kirim goal, server proses (dengan feedback berkala), 
+        lalu kirim result akhir. Bisa dibatalkan di tengah jalan.
+      </p>
+      <div class="concept-card">
+        <h4>📌 Analogi Action</h4>
+        <p>Seperti memesan pizza delivery: kamu order (goal), dapat update "sedang dimasak", 
+        "dalam perjalanan" (feedback), lalu pizza tiba (result). Bisa dibatalkan kalau mau.</p>
+      </div>
+      <div class="concept-card">
+        <h4>🔑 Konsep Penting</h4>
+        <p>• <strong>Goal</strong>: apa yang ingin dicapai<br>
+        • <strong>Feedback</strong>: progress update selama eksekusi<br>
+        • <strong>Result</strong>: hasil akhir setelah selesai<br>
+        • Server: inherit dari <strong>ActionServer</strong><br>
+        • Client: inherit dari <strong>ActionClient</strong></p>
+      </div>`,
+    },
+    example: {
+      title: "Contoh Action Server Sederhana",
+      code: `import rclpy
+from rclpy.node import Node
+from rclpy.action import ActionServer
+from action_tutorials_interfaces.action import Fibonacci
+
+class FibonacciServer(Node):
+    def __init__(self):
+        super().__init__('fibonacci_server')
+        self._server = ActionServer(
+            self,
+            Fibonacci,
+            'fibonacci',
+            self.execute_callback)
+
+    def execute_callback(self, goal_handle):
+        # Goal: hitung fibonacci sampai n
+        n = goal_handle.request.order
+        feedback_msg = Fibonacci.Feedback()
+        sequence = [0, 1]
+
+        for i in range(2, n + 1):
+            sequence.append(sequence[i-1] + sequence[i-2])
+            feedback_msg.partial_sequence = sequence
+            # Kirim feedback
+            goal_handle.publish_feedback(feedback_msg)
+
+        goal_handle.succeed()
+        result = Fibonacci.Result()
+        result.sequence = sequence
+        return result`,
+      explanation: `Server menerima <strong>goal</strong> (berapa angka fibonacci), 
+      menghitung sambil mengirim <strong>feedback</strong> progress, 
+      lalu mengembalikan <strong>result</strong> berupa sequence lengkap.
+        <div style="margin-top:14px; border:1px solid #2a3a55; border-radius:10px; overflow:hidden;"><div style="background:#161b2e; padding:8px 14px; font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:#7c3aed; letter-spacing:1px;">💡 KONSEP TAMBAHAN — Pakai kalau butuh</div><div style="padding:14px; display:flex; flex-direction:column; gap:12px;">
+          <div style="background:#0d1117; border-left:3px solid #00d4ff; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#00d4ff; margin-bottom:6px;">🔄 3 tahap wajib dalam action execute_callback</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;"># 1. Ambil goal dari request
+def execute_callback(self, goal_handle):
+    n = goal_handle.request.order
+
+    # 2. Kirim feedback (progress, opsional)
+    feedback = Fibonacci.Feedback()
+    feedback.partial_sequence = [0, 1]
+    goal_handle.publish_feedback(feedback)
+
+    # 3. Selesai → succeed lalu return result
+    goal_handle.succeed()
+    result = Fibonacci.Result()
+    result.sequence = [0, 1, 1]
+    return result</pre>
+            <div style='font-size:0.75rem; color:#64748b; margin-top:6px;'>→ Urutan wajib: proses → succeed()/abort() → return result</div>
+          </div>
+          <div style="background:#0d1117; border-left:3px solid #ff4757; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#ff4757; margin-bottom:6px;">❌ Jika gagal atau dibatalkan</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;">goal_handle.canceled()  # user membatalkan
+goal_handle.abort()     # error, tidak bisa selesai</pre>
+            <div style='font-size:0.75rem; color:#64748b; margin-top:6px;'>→ Panggil salah satu sebelum return result</div>
+          </div></div></div>`
+    },
+    practice: {
+      title: "Praktek: Action Server Countdown",
+      instruction: `Buat action server dengan struktur dasar untuk countdown. Node bernama <strong>'countdown_server'</strong>.<br>
+      Import yang dibutuhkan:<br>
+      - rclpy, Node<br>
+      - ActionServer dari rclpy.action<br>
+      - Fibonacci dari action_tutorials_interfaces.action (gunakan sebagai placeholder)<br><br>
+      Buat class <strong>CountdownServer(Node)</strong> dengan:<br>
+      - super().__init__('countdown_server')<br>
+      - Buat ActionServer dengan nama action <strong>'countdown'</strong><br>
+      - execute_callback yang memanggil goal_handle.succeed() dan return result<br><br>
+      Ketik <strong>seluruh kode Python</strong> dari awal:`,
+      hint: `ActionServer butuh: (self, action_type, 'action_name', callback)\nCallback harus return result object\nJangan lupa goal_handle.succeed() sebelum return`,
+      filename: "countdown_server.py",
+      checks: [
+        { label: "import rclpy & Node", test: (c) => c.includes('import rclpy') && c.includes('from rclpy.node import Node') },
+        { label: "import ActionServer dari rclpy.action", test: (c) => c.includes('ActionServer') && c.includes('rclpy.action') },
+        { label: "import action type (Fibonacci)", test: (c) => c.includes('Fibonacci') || c.includes('action_tutorials') },
+        { label: "Nama node 'countdown_server'", test: (c) => c.includes('countdown_server') },
+        { label: "ActionServer dibuat di __init__", test: (c) => c.includes('ActionServer(') },
+        { label: "execute_callback didefinisikan", test: (c) => c.includes('execute_callback') || c.includes('def execute') },
+        { label: "goal_handle.succeed() dipanggil", test: (c) => c.includes('goal_handle.succeed()') },
+      ],
+      solution: `import rclpy
+from rclpy.node import Node
+from rclpy.action import ActionServer
+from action_tutorials_interfaces.action import Fibonacci
+
+class CountdownServer(Node):
+    def __init__(self):
+        super().__init__('countdown_server')
+        self._server = ActionServer(
+            self,
+            Fibonacci,
+            'countdown',
+            self.execute_callback)
+        self.get_logger().info('Countdown Server siap!')
+
+    def execute_callback(self, goal_handle):
+        self.get_logger().info('Menerima goal countdown...')
+        goal_handle.succeed()
+        result = Fibonacci.Result()
+        result.sequence = [0]
+        return result
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = CountdownServer()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()`
+    }
+  },
+  {
+    id: 5,
+    name: "Sensor Gazebo",
+    icon: "📡",
+    points: 100,
+    explain: {
+      title: "Sensor di Gazebo + ROS2",
+      content: `<p class="lesson-text">
+        <strong>Gazebo</strong> adalah simulator fisika 3D untuk robot. Sensor di Gazebo 
+        bisa disimulasikan dan datanya dikirim ke ROS2 melalui <strong>ros_gz_bridge</strong>.
+        Sensor umum: LIDAR, kamera, IMU, GPS.
+      </p>
+      <div class="concept-card">
+        <h4>📡 Sensor Umum di Gazebo</h4>
+        <p>• <strong>LaserScan</strong>: LIDAR untuk deteksi obstacle (sensor_msgs/LaserScan)<br>
+        • <strong>Image</strong>: Kamera RGB (sensor_msgs/Image)<br>
+        • <strong>Imu</strong>: Accelerometer + Gyroscope (sensor_msgs/Imu)<br>
+        • <strong>NavSatFix</strong>: GPS (sensor_msgs/NavSatFix)</p>
+      </div>
+      <div class="concept-card">
+        <h4>🔑 Alur Data Sensor</h4>
+        <p>Gazebo Sensor → <strong>ros_gz_bridge</strong> → ROS2 Topic → Node Subscriber</p>
+      </div>`,
+    },
+    example: {
+      title: "Contoh Subscribe Data LIDAR",
+      code: `import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import LaserScan
+
+class LidarSubscriber(Node):
+    def __init__(self):
+        super().__init__('lidar_reader')
+        # Subscribe ke topic LIDAR dari Gazebo
+        self.create_subscription(
+            LaserScan,
+            '/scan',           # Topic dari Gazebo bridge
+            self.scan_callback,
+            10)
+
+    def scan_callback(self, msg):
+        # Ambil jarak minimum (obstacle terdekat)
+        min_range = min(msg.ranges)
+        self.get_logger().info(
+            f'Obstacle terdekat: {min_range:.2f} m')
+        
+        if min_range < 0.5:
+            self.get_logger().warn('BAHAYA: Terlalu dekat!')`,
+      explanation: `Node subscribe ke topic <strong>/scan</strong> yang berisi data LIDAR dari Gazebo.
+      Setiap scan berisi array <strong>ranges[]</strong> yang merupakan jarak ke obstacle di setiap sudut.
+      Kita ambil nilai minimum untuk menemukan obstacle terdekat.
+      <div style="margin-top:14px; border:1px solid #2a3a55; border-radius:10px; overflow:hidden;"><div style="background:#161b2e; padding:8px 14px; font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:#7c3aed; letter-spacing:1px;">💡 KONSEP TAMBAHAN — Pakai kalau butuh</div><div style="padding:14px; display:flex; flex-direction:column; gap:12px;">
+          <div style="background:#0d1117; border-left:3px solid #00d4ff; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#00d4ff; margin-bottom:6px;">📡 Sensor lain dan topic-nya di Gazebo</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;">from sensor_msgs.msg import LaserScan  → topic: /scan
+from sensor_msgs.msg import Imu        → topic: /imu
+from sensor_msgs.msg import Image      → topic: /camera/image
+from sensor_msgs.msg import NavSatFix  → topic: /gps/fix</pre>
+            <div style='font-size:0.75rem; color:#64748b; margin-top:6px;'>→ Topic name tergantung konfigurasi Gazebo bridge</div>
+          </div>
+          <div style="background:#0d1117; border-left:3px solid #00ff9d; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#00ff9d; margin-bottom:6px;">🔍 Cara akses data dari tiap sensor</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;"># LaserScan
+msg.ranges          # list jarak semua sudut
+msg.angle_min       # sudut mulai (radian)
+msg.range_max       # jarak maksimum sensor
+
+# IMU
+msg.linear_acceleration.x/y/z
+msg.angular_velocity.x/y/z
+msg.orientation.x/y/z/w</pre>
+            
+          </div></div></div>`
+    },
+    practice: {
+      title: "Praktek: Subscribe Data IMU",
+      instruction: `Buat node <strong>'imu_reader'</strong> yang subscribe ke topic 
+      <strong>'/imu'</strong> menggunakan tipe pesan <strong>Imu</strong> dari sensor_msgs.<br>
+      Dalam callback, cetak nilai <strong>linear_acceleration.z</strong> dari pesan IMU.<br><br>
+      Ketik <strong>seluruh kode Python</strong> dari awal:`,
+      hint: `from sensor_msgs.msg import Imu\nData IMU ada di msg.linear_acceleration.z, msg.angular_velocity.x, dll`,
+      filename: "imu_reader.py",
+      checks: [
+        { label: "import rclpy & Node", test: (c) => c.includes('import rclpy') && c.includes('from rclpy.node import Node') },
+        { label: "import Imu dari sensor_msgs.msg", test: (c) => c.includes('Imu') && c.includes('sensor_msgs') },
+        { label: "Nama node 'imu_reader'", test: (c) => c.includes('imu_reader') },
+        { label: "subscribe ke '/imu'", test: (c) => c.includes("'/imu'") || c.includes('"/imu"') },
+        { label: "callback function didefinisikan", test: (c) => /def\s+\w+_callback|def\s+callback/.test(c) },
+        { label: "akses msg.linear_acceleration.z", test: (c) => c.includes('linear_acceleration') && c.includes('.z') },
+        { label: "get_logger().info() dipanggil", test: (c) => c.includes('get_logger') && c.includes('info') },
+      ],
+      solution: `import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Imu
+
+class ImuReader(Node):
+    def __init__(self):
+        super().__init__('imu_reader')
+        self.create_subscription(
+            Imu, '/imu', self.imu_callback, 10)
+
+    def imu_callback(self, msg):
+        az = msg.linear_acceleration.z
+        self.get_logger().info(f'Akselerasi Z: {az:.3f} m/s²')
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ImuReader()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()`
+    }
+  },
+  {
+    id: 6,
+    name: "Actuator Gazebo",
+    icon: "🦾",
+    points: 100,
+    explain: {
+      title: "Actuator di Gazebo + ROS2",
+      content: `<p class="lesson-text">
+        <strong>Actuator</strong> adalah komponen yang menggerakkan robot. Di Gazebo, 
+        kita mengontrol actuator dengan publish ke topic kontrol yang terhubung ke plugin Gazebo.
+        Tipe aktuator umum: differential drive, joint controller, gripper.
+      </p>
+      <div class="concept-card">
+        <h4>🦾 Aktuator Umum</h4>
+        <p>• <strong>Cmd Vel</strong>: Kontrol kecepatan mobile robot (geometry_msgs/Twist)<br>
+        • <strong>JointTrajectory</strong>: Kontrol arm robot (trajectory_msgs)<br>
+        • <strong>Float64</strong>: Kontrol satu joint sederhana (std_msgs/Float64)</p>
+      </div>
+      <div class="concept-card">
+        <h4>🔑 Twist Message</h4>
+        <p>• <strong>linear.x</strong>: Kecepatan maju/mundur (m/s)<br>
+        • <strong>linear.y</strong>: Kecepatan samping (m/s)<br>
+        • <strong>angular.z</strong>: Kecepatan rotasi (rad/s)</p>
+      </div>`,
+    },
+    example: {
+      title: "Contoh Kontrol Gerak Robot",
+      code: `import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import Twist
+
+class RobotDriver(Node):
+    def __init__(self):
+        super().__init__('robot_driver')
+        # Publisher ke cmd_vel (motor controller Gazebo)
+        self.pub = self.create_publisher(
+            Twist, '/cmd_vel', 10)
+        # Timer untuk kirim perintah
+        self.create_timer(0.1, self.drive)
+
+    def drive(self):
+        cmd = Twist()
+        cmd.linear.x = 0.5   # Maju 0.5 m/s
+        cmd.angular.z = 0.2  # Belok kiri
+        self.pub.publish(cmd)
+
+    def stop(self):
+        cmd = Twist()  # Semua 0 = berhenti
+        self.pub.publish(cmd)`,
+      explanation: `Publish <strong>Twist</strong> ke topic <strong>/cmd_vel</strong> untuk menggerakkan robot di Gazebo.
+      <strong>linear.x</strong> = maju/mundur, <strong>angular.z</strong> = rotasi kiri/kanan.
+      Untuk berhenti, publish Twist kosong (semua nilai 0).
+      <div style="margin-top:14px; border:1px solid #2a3a55; border-radius:10px; overflow:hidden;"><div style="background:#161b2e; padding:8px 14px; font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:#7c3aed; letter-spacing:1px;">💡 KONSEP TAMBAHAN — Pakai kalau butuh</div><div style="padding:14px; display:flex; flex-direction:column; gap:12px;">
+          <div style="background:#0d1117; border-left:3px solid #00d4ff; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#00d4ff; margin-bottom:6px;">🕹️ Semua field Twist dan artinya</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;">cmd = Twist()
+cmd.linear.x  = 1.0   # maju (+) / mundur (-)
+cmd.linear.y  = 0.0   # geser kiri/kanan (holonomic)
+cmd.linear.z  = 0.0   # naik/turun (drone)
+cmd.angular.x = 0.0   # roll
+cmd.angular.y = 0.0   # pitch
+cmd.angular.z = 0.5   # yaw: kiri (+) / kanan (-)</pre>
+            <div style='font-size:0.75rem; color:#64748b; margin-top:6px;'>→ Robot darat biasanya hanya pakai linear.x dan angular.z</div>
+          </div>
+          <div style="background:#0d1117; border-left:3px solid #ffd32a; border-radius:0 6px 6px 0; padding:10px 14px;">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#ffd32a; margin-bottom:6px;">⛔ Cara menghentikan robot</div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; line-height:1.7; color:#e2e8f0; white-space:pre-wrap;">def stop(self):
+    cmd = Twist()  # semua field = 0.0 by default
+    self.pub.publish(cmd)</pre>
+            <div style='font-size:0.75rem; color:#64748b; margin-top:6px;'>→ Penting! Selalu kirim stop saat program selesai agar robot tidak terus bergerak</div>
+          </div></div></div>`
+    },
+    practice: {
+      title: "Praktek: Node Kontrol Gerak Otomatis",
+      instruction: `Buat node <strong>'auto_driver'</strong> yang publish ke topic <strong>'/cmd_vel'</strong>
+      menggunakan <strong>Twist</strong> dari geometry_msgs.<br>
+      Robot harus bergerak maju dengan <strong>linear.x = 1.0</strong> dan berputar dengan 
+      <strong>angular.z = 0.5</strong>. Kirim setiap <strong>0.5 detik</strong>.<br><br>
+      Ketik <strong>seluruh kode Python</strong> dari awal:`,
+      hint: `from geometry_msgs.msg import Twist\ncmd = Twist()\ncmd.linear.x = 1.0\ncmd.angular.z = 0.5`,
+      filename: "auto_driver.py",
+      checks: [
+        { label: "import rclpy & Node", test: (c) => c.includes('import rclpy') && c.includes('from rclpy.node import Node') },
+        { label: "import Twist dari geometry_msgs.msg", test: (c) => c.includes('Twist') && c.includes('geometry_msgs') },
+        { label: "Nama node 'auto_driver'", test: (c) => c.includes('auto_driver') },
+        { label: "publish ke '/cmd_vel'", test: (c) => c.includes("'/cmd_vel'") || c.includes('"/cmd_vel"') },
+        { label: "cmd.linear.x = 1.0", test: (c) => c.includes('linear.x') && /1\.0|1(?![.\d])/.test(c) },
+        { label: "cmd.angular.z = 0.5", test: (c) => c.includes('angular.z') && /0\.5/.test(c) },
+        { label: "create_timer(0.5, ...)", test: (c) => /create_timer\s*\(\s*0\.5/.test(c) },
+      ],
+      solution: `import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import Twist
+
+class AutoDriver(Node):
+    def __init__(self):
+        super().__init__('auto_driver')
+        self.pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.create_timer(0.5, self.drive_callback)
+
+    def drive_callback(self):
+        cmd = Twist()
+        cmd.linear.x = 1.0
+        cmd.angular.z = 0.5
+        self.pub.publish(cmd)
+        self.get_logger().info('Perintah gerak terkirim!')
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = AutoDriver()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()`
+    }
+  }
+];
+
+// ============================
+// STATE
+// ============================
+let state = {
+  currentTopic: 0,
+  phase: 'explain', // explain | example | practice | result
+  score: 0,
+  attempts: 0,
+  topicsDone: [],
+  unlockedTopics: [0],
+};
+
+// ============================
+// RENDER
+// ============================
+function render() {
+  renderProgress();
+  renderTabs();
+  renderRoadmap();
+  renderLesson();
+}
+
+function renderProgress() {
+  const pct = (state.topicsDone.length / TOPICS.length) * 100;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('scoreDisplay').textContent = `⭐ ${state.score} / ${TOPICS.length * 100} pts`;
+  document.getElementById('statTopics').textContent = `${state.topicsDone.length}/${TOPICS.length}`;
+  document.getElementById('statScore').textContent = state.score;
+  document.getElementById('statAttempts').textContent = state.attempts;
+  const phaseLabels = { explain:'EXPLAIN', example:'CONTOH', practice:'PRAKTEK', result:'DONE' };
+  document.getElementById('statPhase').textContent = phaseLabels[state.phase] || '—';
+}
+
+function renderTabs() {
+  document.querySelectorAll('.topic-tab').forEach((tab, i) => {
+    tab.className = 'topic-tab';
+    if (!state.unlockedTopics.includes(i)) {
+      tab.classList.add('locked');
+      tab.onclick = null;
+    } else if (state.topicsDone.includes(i)) {
+      tab.classList.add('completed');
+      tab.onclick = () => switchTopic(i);
+    } else if (i === state.currentTopic) {
+      tab.classList.add('active');
+      tab.onclick = () => switchTopic(i);
+    } else {
+      tab.onclick = () => switchTopic(i);
+    }
+  });
+}
+
+function renderRoadmap() {
+  const list = document.getElementById('roadmapList');
+  list.innerHTML = TOPICS.map(t => {
+    let statusClass = 'status-pending';
+    let statusText = '○ Belum';
+    if (state.topicsDone.includes(t.id)) { statusClass = 'status-done'; statusText = '✓ Selesai'; }
+    else if (t.id === state.currentTopic) { statusClass = 'status-current'; statusText = '▶ Sedang'; }
+    else if (!state.unlockedTopics.includes(t.id)) { statusText = '🔒 Terkunci'; }
+    return `<li><span>${t.icon} ${t.name}</span><span class="topic-status ${statusClass}">${statusText}</span></li>`;
+  }).join('');
+}
+
+function switchTopic(idx) {
+  if (!state.unlockedTopics.includes(idx)) return;
+  state.currentTopic = idx;
+  if (!state.topicsDone.includes(idx)) state.phase = 'explain';
+  else state.phase = 'result';
+  render();
+  // Show info panel only on explain/result phase
+  setInfoPanel(state.phase === 'explain' || state.phase === 'result');
+}
+
+function renderLesson() {
+  const topic = TOPICS[state.currentTopic];
+  document.getElementById('panelTitle').textContent = `${topic.icon} ${topic.name.toUpperCase()}`;
+  const body = document.getElementById('lessonBody');
+
+  if (state.phase === 'explain') {
+    body.innerHTML = `
+      <div class="lesson-phase active">
+        <div class="phase-badge phase-explain">📖 FASE 1: PENJELASAN</div>
+        <div class="lesson-title">${topic.explain.title}</div>
+        ${topic.explain.content}
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="goToExample()">💻 Lihat Contoh →</button>
+        </div>
+      </div>`;
+  } else if (state.phase === 'example') {
+    body.innerHTML = `
+      <div class="lesson-phase active">
+        <div class="phase-badge phase-example">💻 FASE 2: CONTOH KODE</div>
+        <div class="lesson-title">${topic.example.title}</div>
+        <div style="font-size:0.78rem; color:var(--muted); margin-bottom:8px; font-family:'JetBrains Mono',monospace;">
+          📄 ${topic.practice.filename} &nbsp;|&nbsp; 
+          <span style="color:var(--accent2)">Python · ROS2</span> &nbsp;|&nbsp;
+          <span style="color:var(--green); cursor:pointer" onclick="openKamus()">📚 Kamus Kode</span>
+        </div>
+        ${buildAnnotatedCode(topic.example.code, topic.practice.filename)}
+        <div class="lesson-text" style="margin-top:14px">${topic.example.explanation}</div>
+        <div class="btn-row">
+          <button class="btn btn-reset" onclick="goToExplain()">← Kembali</button>
+          <button class="btn-kamus" onclick="openKamus()" style="padding:10px 16px">📚 Kamus Kode</button>
+          <button class="btn btn-check" onclick="goToPractice()">✍️ Coba Sendiri →</button>
+        </div>
+      </div>`;
+  } else if (state.phase === 'practice') {
+    renderPractice(topic);
+  } else if (state.phase === 'result') {
+    renderResult(topic);
+  }
+}
+
+function renderPractice(topic) {
+  const p = topic.practice;
+  const body = document.getElementById('lessonBody');
+  body.innerHTML = `
+    <div class="lesson-phase active">
+      <div class="phase-badge phase-practice">✍️ FASE 3: PRAKTEK</div>
+      <div class="lesson-title">${p.title}</div>
+      <div class="lesson-text">${p.instruction}</div>
+      <div class="hint-toggle" onclick="toggleHint()">💡 Tampilkan Hint</div>
+      <div class="hint-content" id="hintContent">${p.hint.replace(/\n/g,'<br>')}</div>
+      <div style="margin-bottom:8px">
+        <span style="font-size:0.75rem; color:var(--muted)">Butuh referensi sintaks? →</span>
+        <span class="kamus-tag tag-penting" style="cursor:pointer; margin-left:6px" onclick="openKamus()">📚 Buka Kamus Kode</span>
+      </div>
+      <div class="code-editor">
+        <div class="editor-header">
+          <span class="editor-filename">📄 ${p.filename}</span>
+          <span class="editor-lang">Python · ROS2</span>
+        </div>
+        <div class="editor-lines">
+          <div class="line-nums" id="lineNums">1</div>
+          <textarea class="code-textarea" id="codeEditor" 
+            placeholder="# Ketik kode Python ROS2 kamu di sini..."
+            spellcheck="false"
+            oninput="updateLines()"
+            onscroll="syncScroll()"
+            onkeydown="handleTab(event)"></textarea>
+        </div>
+      </div>
+      <div class="loading" id="loadingIndicator">
+        <div class="spinner"></div>
+        <span>Menganalisis kode kamu...</span>
+      </div>
+      <div class="feedback-box" id="feedbackBox"></div>
+      <ul class="checklist" id="checklist"></ul>
+
+      <!-- TERMINAL OUTPUT PANEL -->
+      <div class="terminal-panel" id="terminalPanel">
+        <div class="terminal-header">
+          <div class="dot-t" style="background:#ff5f56"></div>
+          <div class="dot-t" style="background:#ffbd2e"></div>
+          <div class="dot-t" style="background:#27c93f"></div>
+          <span class="terminal-title">TERMINAL — ROS2 OUTPUT</span>
+          <div class="terminal-running" id="termRunning">
+            <div class="terminal-blink"></div>
+            <span>RUNNING...</span>
+          </div>
+        </div>
+        <div class="terminal-body" id="terminalBody"></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-reset" onclick="goToExample()">← Contoh</button>
+        <button class="btn btn-reset" onclick="resetEditor()">🗑 Reset</button>
+        <button class="btn btn-run" onclick="runCode()" id="runBtn">▶ RUN</button>
+        <button class="btn btn-check" onclick="checkCode()" id="checkBtn">🔍 CEK KODE</button>
+      </div>
+    </div>`;
+  updateLines();
+}
+
+function renderResult(topic) {
+  const body = document.getElementById('lessonBody');
+  const earned = state.topicsDone.includes(topic.id) ? topic.points : 0;
+  body.innerHTML = `
+    <div class="lesson-phase active">
+      <div class="phase-badge phase-result">✅ SELESAI!</div>
+      <div class="lesson-title" style="color: var(--green)">🎉 Topik ${topic.name} Berhasil!</div>
+      <div class="lesson-text">Kamu sudah menguasai konsep <strong>${topic.name}</strong> di ROS2. 
+      Poin didapat: <strong style="color:var(--yellow)">+${topic.points}</strong></div>
+      <div class="code-block">
+        <div style="font-size:0.7rem; color:var(--muted); margin-bottom:8px; font-family:'JetBrains Mono'">✓ SOLUSI REFERENSI:</div>
+        <pre>${syntaxHL(topic.practice.solution)}</pre>
+      </div>
+      <div class="btn-row">
+        ${state.currentTopic < TOPICS.length - 1 
+          ? `<button class="btn btn-next" onclick="nextTopic()">Topik Berikutnya: ${TOPICS[state.currentTopic+1]?.name || ''} →</button>`
+          : `<button class="btn btn-next" onclick="showFinal()">🏆 LIHAT HASIL AKHIR</button>`}
+      </div>
+    </div>`;
+}
+
+// ============================
+// INFO PANEL VISIBILITY
+// ============================
+function setInfoPanel(visible) {
+  const panel = document.getElementById('infoPanelRight');
+  const layout = document.querySelector('.main-layout');
+  if (!panel || !layout) return;
+  if (visible) {
+    panel.classList.remove('hidden');
+    layout.classList.remove('full-width');
+  } else {
+    panel.classList.add('hidden');
+    layout.classList.add('full-width');
+  }
+}
+
+// ============================
+// NAVIGATION
+// ============================
+function goToExplain() { state.phase = 'explain'; renderLesson(); setInfoPanel(true); }
+function goToExample() { state.phase = 'example'; renderLesson(); setInfoPanel(false); }
+function goToPractice() { state.phase = 'practice'; renderLesson(); setInfoPanel(false); }
+
+function nextTopic() {
+  const next = state.currentTopic + 1;
+  if (next < TOPICS.length) {
+    state.currentTopic = next;
+    state.phase = 'explain';
+    if (!state.unlockedTopics.includes(next)) state.unlockedTopics.push(next);
+    render();
+    setInfoPanel(true);
+    window.scrollTo(0, 0);
+  }
+}
+
+// ============================
+// KAMUS KODE ROS2
+// ============================
+const KAMUS = [
+  {
+    section: "📦 IMPORT — Memuat Library",
+    items: [
+      {
+        code: "import rclpy",
+        tag: "wajib",
+        title: "Import Library ROS2 untuk Python",
+        explain: `<strong>rclpy</strong> adalah singkatan dari <strong>ROS Client Library for Python</strong>. Ini adalah "kotak peralatan utama" ROS2 untuk Python.<br><br>
+        Tanpa baris ini, Python tidak tahu apa itu ROS2 dan semua perintah ROS2 tidak akan bekerja.`,
+        analogy: "Seperti memasukkan buku panduan resmi ROS2 ke dalam tas sebelum mulai bekerja. Tanpa buku panduan, kamu tidak tahu aturannya.",
+        example: `import rclpy\n# Sekarang kamu bisa pakai semua fitur ROS2`
+      },
+      {
+        code: "from rclpy.node import Node",
+        tag: "wajib",
+        title: "Mengambil Class 'Node' dari Library rclpy",
+        explain: `<strong>from ... import ...</strong> artinya "dari library X, ambil komponen Y saja".<br><br>
+        <strong>rclpy.node</strong> = modul yang berisi semua hal tentang Node ROS2.<br>
+        <strong>Node</strong> = class induk/template untuk membuat node ROS2.<br><br>
+        Dengan mengimport Node, kamu bisa membuat class sendiri yang "mewarisi" semua kemampuan Node ROS2.`,
+        analogy: "Seperti mengambil cetak biru (blueprint) rumah dari kantor arsitektur. Kamu tidak perlu buat dari nol — tinggal modifikasi blueprint yang sudah ada.",
+        example: `from rclpy.node import Node\n# Sekarang kamu bisa pakai: class NamaKu(Node):`
+      },
+      {
+        code: "from std_msgs.msg import String",
+        tag: "penting",
+        title: "Import Tipe Pesan String dari std_msgs",
+        explain: `<strong>std_msgs</strong> = package berisi tipe pesan standar ROS2.<br>
+        <strong>msg</strong> = subfolder berisi semua definisi pesan.<br>
+        <strong>String</strong> = tipe pesan untuk mengirim teks.<br><br>
+        Tipe pesan lain: <strong>Float64</strong> (angka desimal), <strong>Int32</strong> (angka bulat), <strong>Bool</strong> (True/False).`,
+        analogy: "Seperti memilih jenis amplop sebelum kirim surat. Mau kirim teks? Pakai amplop String. Mau kirim angka? Pakai amplop Float64.",
+        example: `from std_msgs.msg import String   # untuk teks\nfrom std_msgs.msg import Float64  # untuk angka desimal\nfrom std_msgs.msg import Bool     # untuk True/False`
+      },
+      {
+        code: "from std_srvs.srv import SetBool",
+        tag: "penting",
+        title: "Import Tipe Service SetBool",
+        explain: `<strong>std_srvs</strong> = package berisi tipe service standar ROS2.<br>
+        <strong>srv</strong> = subfolder untuk service (berbeda dengan msg untuk topic).<br>
+        <strong>SetBool</strong> = service yang menerima boolean (True/False) dan mengembalikan success + message.<br><br>
+        SetBool punya dua bagian: <strong>Request</strong> (berisi data boolean) dan <strong>Response</strong> (berisi success dan message).`,
+        analogy: "Seperti formulir on/off: kamu isi True atau False, sistem balas dengan 'berhasil/tidak' beserta keterangan.",
+        example: `from std_srvs.srv import SetBool\n# Request: request.data (bool)\n# Response: response.success, response.message`
+      },
+      {
+        code: "from geometry_msgs.msg import Twist",
+        tag: "penting",
+        title: "Import Pesan Twist untuk Kontrol Gerak Robot",
+        explain: `<strong>geometry_msgs</strong> = package pesan untuk data geometri (posisi, kecepatan, orientasi).<br>
+        <strong>Twist</strong> = pesan untuk kecepatan linear dan angular.<br><br>
+        Field penting:<br>
+        • <strong>linear.x</strong> = maju (+) / mundur (-) dalam m/s<br>
+        • <strong>linear.y</strong> = geser kiri/kanan<br>
+        • <strong>angular.z</strong> = putar kiri (+) / kanan (-) dalam rad/s`,
+        analogy: "Seperti stik joystick game: satu bagian untuk maju-mundur, satu lagi untuk belok.",
+        example: `cmd = Twist()\ncmd.linear.x = 0.5   # maju 0.5 m/s\ncmd.angular.z = 0.3  # putar kiri`
+      }
+    ]
+  },
+  {
+    section: "🏗️ CLASS — Membuat Node",
+    items: [
+      {
+        code: "class NamaNode(Node):",
+        tag: "wajib",
+        title: "Membuat Class Node Baru (Inheritance)",
+        explain: `<strong>class</strong> = kata kunci Python untuk mendefinisikan class (cetakan objek).<br>
+        <strong>NamaNode</strong> = nama class yang kamu buat (bebas, tapi biasanya PascalCase).<br>
+        <strong>(Node)</strong> = tanda kurung ini artinya "mewarisi dari class Node" → semua kemampuan Node ROS2 langsung tersedia!<br>
+        <strong>:</strong> = tanda titik dua wajib ada, menandai awal isi class.<br><br>
+        Dengan inheritance, kamu tidak perlu kode dari nol — cukup tambah fitur yang kamu butuhkan.`,
+        analogy: "Seperti membuat tipe robot baru berdasarkan robot standar. Robot barumu punya semua kemampuan robot standar + kemampuan tambahan yang kamu tambahkan.",
+        example: `class MyRobotNode(Node):   # mewarisi Node\n    def __init__(self):\n        super().__init__('nama_node')`
+      },
+      {
+        code: "def __init__(self):",
+        tag: "wajib",
+        title: "Konstruktor — Fungsi yang Pertama Dijalankan",
+        explain: `<strong>def</strong> = kata kunci Python untuk mendefinisikan fungsi.<br>
+        <strong>__init__</strong> = nama khusus Python (dua underscore di kiri-kanan). Ini adalah <em>constructor</em> — dijalankan PERTAMA KALI saat node dibuat.<br>
+        <strong>self</strong> = referensi ke objek itu sendiri (wajib selalu ada sebagai parameter pertama fungsi dalam class).<br><br>
+        Di dalam __init__ kamu biasanya: panggil super(), buat timer, buat publisher/subscriber, baca parameter.`,
+        analogy: "Seperti 'ritual start-up' robot: begitu robot dihidupkan, dia langsung jalankan semua persiapan awal secara otomatis.",
+        example: `def __init__(self):\n    super().__init__('nama_node')  # WAJIB pertama!\n    self.create_timer(1.0, self.callback)\n    # ... setup lainnya`
+      },
+      {
+        code: "super().__init__('nama_node')",
+        tag: "wajib",
+        title: "Memanggil Constructor Node Induk + Memberi Nama",
+        explain: `<strong>super()</strong> = mengakses class induk (yaitu Node dari rclpy).<br>
+        <strong>.__init__('nama_node')</strong> = memanggil constructor Node induk dan memberikan nama untuk node ini.<br><br>
+        Baris ini <strong>WAJIB</strong> ada dan harus menjadi baris <strong>pertama</strong> di dalam __init__. Tanpa ini, node tidak akan terdaftar di sistem ROS2.<br><br>
+        Nama node harus unik di dalam satu ROS2 system.`,
+        analogy: "Seperti mendaftarkan diri ke sistem: 'Halo ROS2, aku adalah node bernama X, tolong daftarkan aku!' Tanpa pendaftaran, ROS2 tidak tahu kamu ada.",
+        example: `def __init__(self):\n    super().__init__('hello_node')  # Node bernama 'hello_node'\n    # Sekarang node sudah terdaftar di ROS2`
+      },
+      {
+        code: "self.xxx = ...",
+        tag: "penting",
+        title: "Menyimpan Data sebagai Atribut Objek",
+        explain: `<strong>self</strong> = objek node itu sendiri.<br>
+        <strong>self.nama = nilai</strong> = menyimpan nilai sebagai atribut yang bisa diakses dari fungsi manapun di dalam class.<br><br>
+        Contoh: <strong>self.pub</strong> menyimpan publisher, <strong>self.count</strong> menyimpan penghitung.<br><br>
+        Berbeda dengan variabel biasa yang hanya ada di dalam satu fungsi, atribut <strong>self</strong> bisa diakses dari semua fungsi di class.`,
+        analogy: "Seperti menyimpan barang di loker pribadi robot. Dari manapun si robot bekerja, dia bisa buka loker untuk ambil atau simpan barang.",
+        example: `self.pub = self.create_publisher(...)  # simpan publisher\nself.count = 0                         # simpan penghitung\n\ndef timer_callback(self):\n    self.count += 1  # akses dari fungsi lain`
+      }
+    ]
+  },
+  {
+    section: "⚙️ FUNGSI NODE — Fitur Bawaan Node",
+    items: [
+      {
+        code: "self.get_logger().info('pesan')",
+        tag: "penting",
+        title: "Mencetak Pesan ke Terminal ROS2",
+        explain: `<strong>get_logger()</strong> = mengambil sistem logging milik node.<br>
+        <strong>.info('pesan')</strong> = cetak pesan level INFO (informasi biasa).<br><br>
+        Level logger yang tersedia:<br>
+        • <strong>.info()</strong> = pesan biasa (putih/hijau)<br>
+        • <strong>.warn()</strong> = peringatan (kuning)<br>
+        • <strong>.error()</strong> = error (merah)<br>
+        • <strong>.debug()</strong> = debug detail (abu-abu)<br><br>
+        Output muncul di terminal dengan timestamp otomatis.`,
+        analogy: "Seperti robot yang 'berbicara' ke operator lewat radio. Ada level: laporan biasa, peringatan, dan darurat.",
+        example: `self.get_logger().info('Node berjalan')       # [INFO]\nself.get_logger().warn('Baterai rendah')      # [WARN]\nself.get_logger().error('Motor tidak merespons')  # [ERROR]`
+      },
+      {
+        code: "self.create_timer(detik, callback)",
+        tag: "penting",
+        title: "Membuat Timer — Jalankan Fungsi Berulang Setiap N Detik",
+        explain: `<strong>create_timer()</strong> = membuat timer periodik.<br>
+        <strong>detik</strong> = interval waktu dalam detik (float). Contoh: <strong>1.0</strong> = setiap 1 detik, <strong>0.5</strong> = setiap 0.5 detik.<br>
+        <strong>callback</strong> = nama fungsi yang akan dipanggil setiap timer berbunyi (tanpa kurung!).<br><br>
+        Timer terus berjalan selama node hidup (selama rclpy.spin() aktif).`,
+        analogy: "Seperti alarm repeating di handphone: setiap X detik, alarm berbunyi dan menjalankan tugas tertentu secara otomatis.",
+        example: `self.create_timer(1.0, self.timer_callback)  # tiap 1 detik\nself.create_timer(0.1, self.fast_loop)        # tiap 0.1 detik (10 Hz)\n\ndef timer_callback(self):   # fungsi yang dipanggil\n    self.get_logger().info('Tick!')`
+      },
+      {
+        code: "self.create_publisher(Type, '/topic', qos)",
+        tag: "penting",
+        title: "Membuat Publisher — Untuk Mengirim Pesan ke Topic",
+        explain: `<strong>create_publisher()</strong> = membuat publisher yang bisa kirim pesan ke topic.<br>
+        <strong>Type</strong> = tipe pesan yang dikirim (String, Float64, Twist, dll).<br>
+        <strong>'/topic'</strong> = nama topic (selalu diawali slash /).<br>
+        <strong>qos</strong> = ukuran antrian (biasanya 10).<br><br>
+        Setelah dibuat, panggil <strong>self.pub.publish(msg)</strong> untuk mengirim pesan.`,
+        analogy: "Seperti membuat siaran radio: kamu punya pemancar (publisher) dan kamu broadcast ke frekuensi tertentu (topic). Siapapun yang dengerin frekuensi itu akan menerima.",
+        example: `self.pub = self.create_publisher(String, '/chatter', 10)\n\n# Kirim pesan:\nmsg = String()\nmsg.data = 'Halo ROS2!'\nself.pub.publish(msg)`
+      },
+      {
+        code: "self.create_subscription(Type, '/topic', callback, qos)",
+        tag: "penting",
+        title: "Membuat Subscriber — Untuk Menerima Pesan dari Topic",
+        explain: `<strong>create_subscription()</strong> = mendaftarkan node untuk menerima pesan dari topic.<br>
+        <strong>Type</strong> = tipe pesan yang diterima (harus sama dengan publisher!).<br>
+        <strong>'/topic'</strong> = topic yang didengarkan.<br>
+        <strong>callback</strong> = fungsi yang dipanggil setiap ada pesan masuk.<br>
+        <strong>qos</strong> = ukuran antrian (biasanya 10).<br><br>
+        Fungsi callback menerima parameter <strong>msg</strong> berisi pesan yang diterima.`,
+        analogy: "Seperti mendengarkan siaran radio: kamu tune ke frekuensi tertentu dan setiap ada siaran masuk, kamu otomatis dengarkan.",
+        example: `self.create_subscription(String, '/chatter', self.listener_cb, 10)\n\ndef listener_cb(self, msg):   # dipanggil tiap ada pesan\n    self.get_logger().info(f'Dapat: {msg.data}')`
+      },
+      {
+        code: "self.declare_parameter('nama', default)",
+        tag: "penting",
+        title: "Mendeklarasikan Parameter dengan Nilai Default",
+        explain: `<strong>declare_parameter()</strong> = mendaftarkan parameter ke node ROS2.<br>
+        <strong>'nama'</strong> = nama parameter (string).<br>
+        <strong>default</strong> = nilai awal jika tidak diset dari luar.<br><br>
+        Tipe default menentukan tipe parameter:<br>
+        • <strong>'teks'</strong> → string parameter<br>
+        • <strong>1.5</strong> → float parameter<br>
+        • <strong>10</strong> → integer parameter<br>
+        • <strong>True</strong> → boolean parameter`,
+        analogy: "Seperti mengatur nilai default di form online. Kalau pengguna tidak mengisi, nilai default yang dipakai.",
+        example: `self.declare_parameter('speed', 0.5)        # float default 0.5\nself.declare_parameter('robot_name', 'RoboX')  # string\nself.declare_parameter('debug', False)      # boolean`
+      },
+      {
+        code: "self.get_parameter('nama').value",
+        tag: "penting",
+        title: "Membaca Nilai Parameter",
+        explain: `<strong>get_parameter('nama')</strong> = mengambil objek parameter berdasarkan namanya.<br>
+        <strong>.value</strong> = mengambil nilai aktual dari parameter tersebut.<br><br>
+        Nilai bisa berubah jika parameter diset ulang dari luar (via terminal atau launch file), jadi lebih baik baca ulang setiap kali butuh nilai terbaru.`,
+        analogy: "Seperti membuka laci untuk cek nilai pengaturan. Bisa dibaca kapan saja, dan nilai bisa berubah kalau ada yang mengubahnya dari luar.",
+        example: `speed = self.get_parameter('speed').value\nname = self.get_parameter('robot_name').value\nself.get_logger().info(f'Speed: {speed}, Name: {name}')`
+      },
+      {
+        code: "self.create_service(Type, '/srv', callback)",
+        tag: "penting",
+        title: "Membuat Service Server",
+        explain: `<strong>create_service()</strong> = membuat server yang bisa menerima request dan kirim response.<br>
+        <strong>Type</strong> = tipe service (SetBool, Trigger, dll).<br>
+        <strong>'/srv'</strong> = nama service.<br>
+        <strong>callback</strong> = fungsi yang menangani request.<br><br>
+        Callback wajib menerima <strong>(self, request, response)</strong> dan wajib <strong>return response</strong>!`,
+        analogy: "Seperti membuka loket layanan: kamu siap menerima permintaan, memprosesnya, dan memberikan jawaban balik.",
+        example: `self.srv = self.create_service(SetBool, '/set_led', self.handle)\n\ndef handle(self, request, response):\n    response.success = True\n    response.message = 'OK'\n    return response  # ← WAJIB!`
+      }
+    ]
+  },
+  {
+    section: "🔁 FUNGSI UTAMA — main() dan rclpy",
+    items: [
+      {
+        code: "def main(args=None):",
+        tag: "wajib",
+        title: "Mendefinisikan Fungsi Utama Program",
+        explain: `<strong>def main</strong> = mendefinisikan fungsi bernama main (konvensi ROS2).<br>
+        <strong>args=None</strong> = parameter opsional untuk menerima argumen command line. Default-nya None.<br><br>
+        Fungsi main adalah "pintu masuk" program ROS2. Di sini semua diinisialisasi, dijalankan, dan dimatikan dengan bersih.`,
+        analogy: "Seperti prosedur startup dan shutdown resmi robot: nyalakan sistem, jalankan, tunggu sampai selesai, matikan dengan bersih.",
+        example: `def main(args=None):\n    rclpy.init(args=args)   # 1. Nyalakan ROS2\n    node = MyNode()         # 2. Buat node\n    rclpy.spin(node)        # 3. Jalankan\n    rclpy.shutdown()        # 4. Matikan`
+      },
+      {
+        code: "rclpy.init(args=args)",
+        tag: "wajib",
+        title: "Menginisialisasi Sistem ROS2",
+        explain: `<strong>rclpy.init()</strong> = menyalakan/menginisialisasi sistem ROS2.<br>
+        <strong>args=args</strong> = meneruskan argumen command line ke ROS2 (untuk parameter seperti --ros-args).<br><br>
+        Baris ini <strong>WAJIB</strong> dipanggil SEBELUM membuat node manapun. Tanpa init(), semua perintah ROS2 akan error.`,
+        analogy: "Seperti menyalakan mesin mobil sebelum berkendara. Tanpa start mesin, setir dan pedal tidak akan berfungsi.",
+        example: `def main(args=None):\n    rclpy.init(args=args)  # ← HARUS PERTAMA\n    node = MyNode()        # Baru buat node`
+      },
+      {
+        code: "rclpy.spin(node)",
+        tag: "wajib",
+        title: "Menjalankan Node dalam Loop Tak Terbatas",
+        explain: `<strong>rclpy.spin()</strong> = membuat node masuk ke event loop dan terus berjalan.<br><br>
+        Selama spin() aktif:<br>
+        • Timer terus terpicu sesuai intervalnya<br>
+        • Subscriber terus menerima pesan<br>
+        • Service terus menunggu request<br><br>
+        Node baru berhenti saat pengguna tekan <strong>Ctrl+C</strong>. Tanpa spin(), node langsung mati setelah __init__.`,
+        analogy: "Seperti mode 'standby aktif' robot: robot terus siap menerima perintah dan menjalankan tugasnya sampai ada yang mematikannya.",
+        example: `node = MyNode()\nrclpy.spin(node)  # Berjalan terus...\n# Ctrl+C → keluar dari spin\nrclpy.shutdown()`
+      },
+      {
+        code: "rclpy.shutdown()",
+        tag: "wajib",
+        title: "Mematikan Sistem ROS2 dengan Bersih",
+        explain: `<strong>rclpy.shutdown()</strong> = menutup semua koneksi ROS2 dan membersihkan resource.<br><br>
+        Dipanggil setelah spin() selesai (setelah Ctrl+C). Memastikan semua node ditutup dengan benar, tidak ada resource yang bocor (memory leak).`,
+        analogy: "Seperti prosedur shutdown resmi: tutup semua pintu, matikan semua sistem, baru matikan mesin utama.",
+        example: `rclpy.spin(node)\n# Setelah Ctrl+C:\nrclpy.shutdown()  # Bersihkan semua`
+      },
+      {
+        code: "if __name__ == '__main__':",
+        tag: "wajib",
+        title: "Blok Eksekusi Langsung (Entry Point)",
+        explain: `<strong>__name__</strong> = variabel Python yang berisi nama module saat ini.<br>
+        • Jika file dijalankan langsung: <strong>__name__ == '__main__'</strong> → True<br>
+        • Jika file di-import: <strong>__name__ == 'namafile'</strong> → False<br><br>
+        Jadi kode di dalam blok ini hanya jalan jika kamu jalankan file ini langsung, tidak jika di-import oleh file lain.`,
+        analogy: "Seperti: 'Jalankan prosedur ini HANYA jika kamu adalah pemimpin tim, bukan anggota biasa.' Membuat file bisa dipakai sebagai library DAN sebagai program mandiri.",
+        example: `if __name__ == '__main__':\n    main()  # Hanya jalan kalau file ini dijalankan langsung`
+      }
+    ]
+  },
+  {
+    section: "🐍 PYTHON DASAR — Sintaks Umum",
+    items: [
+      {
+        code: "def nama_fungsi(self):",
+        tag: "penting",
+        title: "Mendefinisikan Fungsi/Method dalam Class",
+        explain: `<strong>def</strong> = kata kunci untuk mendefinisikan fungsi.<br>
+        <strong>nama_fungsi</strong> = nama fungsi (snake_case, huruf kecil + underscore).<br>
+        <strong>self</strong> = WAJIB ada sebagai parameter pertama untuk fungsi dalam class. Mengacu ke objek itu sendiri.<br>
+        <strong>:</strong> = tanda titik dua wajib, menandai awal isi fungsi.<br><br>
+        Kode di dalam fungsi harus di-indent (4 spasi).`,
+        analogy: "Seperti mendefinisikan kemampuan robot: 'robot ini punya kemampuan bernama X yang melakukan Y'.",
+        example: `def timer_callback(self):       # fungsi tanpa parameter tambahan\n    self.get_logger().info('Tick!')\n\ndef on_message(self, msg):      # dengan parameter pesan\n    print(msg.data)`
+      },
+      {
+        code: "f'teks {variabel}'",
+        tag: "penting",
+        title: "f-String — Menggabungkan Teks dan Variabel",
+        explain: `<strong>f'...'</strong> = f-string (formatted string literal) Python 3.<br>
+        Huruf <strong>f</strong> sebelum tanda kutip menandai ini adalah f-string.<br>
+        <strong>{variabel}</strong> = kurung kurawal berisi ekspresi/variabel yang akan dimasukkan ke string.<br><br>
+        Cara termudah untuk membuat pesan dinamis yang berisi nilai variabel.`,
+        analogy: "Seperti mengisi template surat otomatis: 'Halo {nama}, skor kamu {nilai}.' — nilai diisi otomatis dari variabel.",
+        example: `speed = 1.5\nname = 'RoboX'\nself.get_logger().info(f'Robot {name} kecepatan {speed} m/s')\n# Output: Robot RoboX kecepatan 1.5 m/s`
+      },
+      {
+        code: "# komentar",
+        tag: "opsional",
+        title: "Komentar — Penjelasan Kode yang Diabaikan Python",
+        explain: `<strong>#</strong> = tanda hash mengawali komentar. Semua teks setelah # di baris yang sama diabaikan oleh Python.<br><br>
+        Komentar berguna untuk:<br>
+        • Menjelaskan apa yang dilakukan kode<br>
+        • Menonaktifkan baris kode sementara<br>
+        • Membuat kode lebih mudah dipahami orang lain`,
+        analogy: "Seperti catatan post-it di buku: kamu bisa tulis apa saja, tapi tidak mempengaruhi isi buku itu sendiri.",
+        example: `# Inisialisasi node ROS2\nsuper().__init__('my_node')   # nama unik node\n\n# self.create_timer(...)  ← baris ini dinonaktifkan`
+      }
+    ]
+  }
+];
+
+function openKamus() {
+  renderKamusContent(KAMUS);
+  document.getElementById('kamusModal').classList.add('show');
+  document.getElementById('kamusSearch').value = '';
+  document.getElementById('kamusSearch').focus();
+}
+
+function closeKamus() {
+  document.getElementById('kamusModal').classList.remove('show');
+}
+
+function renderKamusContent(data) {
+  const container = document.getElementById('kamusContent');
+  container.innerHTML = data.map(section => {
+    const items = section.items.map((item, idx) => `
+      <div class="kamus-item" id="ki-${section.section.slice(0,5)}-${idx}" onclick="toggleKamusItem(this)">
+        <div class="kamus-item-head">
+          <span class="kamus-code">${escapeHtml(item.code)}</span>
+          <span class="kamus-tag tag-${item.tag}">${item.tag}</span>
+          <span class="kamus-arrow">▶</span>
+        </div>
+        <div class="kamus-detail">
+          <div class="kamus-detail-title">${item.title}</div>
+          <div class="kamus-detail-text">${item.explain}</div>
+          ${item.analogy ? `<div class="kamus-analogy">${item.analogy}</div>` : ''}
+          ${item.example ? `<div class="kamus-example-code">${escapeHtml(item.example)}</div>` : ''}
+        </div>
+      </div>`).join('');
+    return `
+      <div class="kamus-section-title">${section.section}</div>
+      ${items}`;
+  }).join('');
+}
+
+function toggleKamusItem(el) {
+  el.classList.toggle('open');
+}
+
+function filterKamus(query) {
+  const q = query.toLowerCase();
+  if (!q) { renderKamusContent(KAMUS); return; }
+  const filtered = KAMUS.map(section => ({
+    ...section,
+    items: section.items.filter(item =>
+      item.code.toLowerCase().includes(q) ||
+      item.title.toLowerCase().includes(q) ||
+      item.explain.toLowerCase().includes(q)
+    )
+  })).filter(s => s.items.length > 0);
+  renderKamusContent(filtered);
+  // Auto-open all results when filtering
+  document.querySelectorAll('.kamus-item').forEach(el => el.classList.add('open'));
+}
+
+// Keyboard shortcut: K to open Kamus
+document.addEventListener('keydown', e => {
+  if (e.key === 'k' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); openKamus(); }
+  if (e.key === 'Escape') closeKamus();
+});
+
+// ============================
+// ANNOTATED CODE EXAMPLE
+// ============================
+const CODE_NOTES = {
+  'import rclpy': { short: 'import rclpy', note: '📦 Memuat library utama ROS2 untuk Python. WAJIB ada di setiap program ROS2.', ana: 'Seperti memasukkan buku panduan ROS2 ke tas.' },
+  'from rclpy.node import Node': { short: 'from rclpy.node import Node', note: '📦 Mengambil class Node (template dasar node ROS2) dari library rclpy.', ana: 'Seperti mengambil cetak biru dari kantor arsitektur untuk dimodifikasi.' },
+  'from std_msgs.msg import': { short: 'from std_msgs.msg import ...', note: '📦 Mengimpor tipe pesan dari package std_msgs. Tipe pesan menentukan "bentuk" data yang dikirim.', ana: 'Memilih jenis amplop sebelum kirim data.' },
+  'from std_srvs.srv import': { short: 'from std_srvs.srv import ...', note: '📦 Mengimpor tipe service standar ROS2 (SetBool, Trigger, Empty).', ana: 'Memilih jenis formulir untuk layanan request-response.' },
+  'from geometry_msgs.msg import': { short: 'from geometry_msgs.msg import ...', note: '📦 Mengimpor tipe pesan geometri (Twist untuk kecepatan, Pose untuk posisi, dll).', ana: 'Memilih jenis alat ukur yang tepat.' },
+  'from sensor_msgs.msg import': { short: 'from sensor_msgs.msg import ...', note: '📦 Mengimpor tipe pesan sensor (LaserScan, Imu, Image, dll).', ana: 'Memilih format data yang cocok dengan jenis sensornya.' },
+  '(Node):': { short: 'class X(Node):', note: '🏗️ Class baru yang mewarisi Node ROS2. Tanda (Node) = "mewarisi semua kemampuan Node".', ana: 'Membuat robot baru berdasarkan template robot standar.' },
+  'def __init__(self)': { short: 'def __init__(self):', note: '⚙️ Constructor — dijalankan PERTAMA saat node dibuat. Tempat setup awal: timer, publisher, subscriber.', ana: 'Ritual startup robot: semua persiapan dilakukan di sini.' },
+  'super().__init__(': { short: "super().__init__('nama')", note: '⚙️ WAJIB! Mendaftarkan node ke sistem ROS2 dengan nama unik. Harus menjadi baris PERTAMA di __init__.', ana: 'Daftar ke kantor ROS2: "Halo, aku node bernama X!"' },
+  'get_logger().info(': { short: 'self.get_logger().info(...)', note: '📢 Cetak pesan INFO ke terminal ROS2. Ada juga .warn() (kuning) dan .error() (merah).', ana: 'Radio komunikasi robot ke operator.' },
+  'get_logger().warn(': { short: 'self.get_logger().warn(...)', note: '⚠️ Cetak pesan PERINGATAN ke terminal (warna kuning). Untuk kondisi tidak normal tapi masih aman.', ana: 'Lampu kuning di dashboard — perlu diperhatikan.' },
+  'get_logger().error(': { short: 'self.get_logger().error(...)', note: '❌ Cetak pesan ERROR ke terminal (warna merah). Untuk kondisi berbahaya atau kegagalan.', ana: 'Alarm darurat robot.' },
+  'create_timer(': { short: 'self.create_timer(detik, callback)', note: '⏱ Membuat timer periodik. Parameter: interval dalam detik, dan nama fungsi callback (tanpa kurung!).', ana: 'Alarm repeating: setiap X detik, jalankan fungsi secara otomatis.' },
+  'create_publisher(': { short: 'self.create_publisher(Type, topic, qos)', note: '📡 Membuat publisher untuk mengirim pesan ke topic. QoS (angka terakhir) = ukuran antrian, biasanya 10.', ana: 'Membuat pemancar radio untuk broadcast data.' },
+  'create_subscription(': { short: 'self.create_subscription(Type, topic, cb, qos)', note: '📻 Mendaftarkan node untuk menerima pesan dari topic. Callback dipanggil setiap pesan masuk.', ana: 'Mendengarkan frekuensi radio tertentu.' },
+  '.publish(': { short: 'self.pub.publish(msg)', note: '📤 Mengirim pesan ke topic. Objek pesan harus dibuat dulu (msg = Type()), lalu isi field-nya.', ana: 'Menekan tombol "kirim" setelah mengisi pesan.' },
+  'declare_parameter(': { short: "self.declare_parameter('nama', default)", note: '⚙️ Mendeklarasikan parameter dengan nilai default. Tipe otomatis terdeteksi dari nilai default-nya.', ana: 'Mengatur nilai default di form konfigurasi.' },
+  'get_parameter(': { short: "self.get_parameter('nama').value", note: '⚙️ Membaca nilai parameter. Tambahkan .value di akhir untuk mendapat nilai aktualnya.', ana: 'Membuka laci konfigurasi untuk cek nilai pengaturan.' },
+  'create_service(': { short: 'self.create_service(Type, srv, callback)', note: '🔧 Membuat service server. Callback WAJIB menerima (request, response) dan WAJIB return response.', ana: 'Membuka loket layanan: siap terima permintaan, proses, dan balas.' },
+  'return response': { short: 'return response', note: '🔧 WAJIB! Setiap callback service harus mengembalikan response. Tanpa ini service akan hang (tidak merespons).', ana: 'Menyerahkan hasil kerja kembali ke pelanggan.' },
+  'def main(args=None)': { short: 'def main(args=None):', note: '🔁 Fungsi utama program ROS2. args=None berarti tidak ada argumen default dari command line.', ana: 'Prosedur resmi startup dan shutdown robot.' },
+  'rclpy.init(': { short: 'rclpy.init(args=args)', note: '🔁 Menyalakan sistem ROS2. WAJIB dipanggil PERTAMA sebelum membuat node apapun.', ana: 'Menyalakan mesin utama sebelum menggunakan robot.' },
+  'rclpy.spin(': { short: 'rclpy.spin(node)', note: '🔁 Membuat node berjalan terus dalam event loop. Timer, subscriber, service aktif selama spin() berjalan. Keluar dengan Ctrl+C.', ana: 'Mode standby aktif — robot terus mendengarkan dan bekerja.' },
+  'rclpy.shutdown(': { short: 'rclpy.shutdown()', note: '🔁 Mematikan sistem ROS2 dengan bersih setelah spin() selesai. Selalu panggil ini di akhir.', ana: 'Prosedur shutdown resmi: tutup semua koneksi, matikan sistem.' },
+  "if __name__ == '__main__'": { short: "if __name__ == '__main__':", note: "🐍 Kode di blok ini hanya jalan jika file dijalankan langsung, tidak jika di-import sebagai library.", ana: "Seperti: 'Lakukan ini hanya jika kamu pemimpin, bukan anggota.'" },
+  'goal_handle.succeed(': { short: 'goal_handle.succeed()', note: '🎯 Menandai action goal sebagai berhasil. Harus dipanggil sebelum return result di callback action.', ana: 'Laporan resmi: "Misi selesai dengan sukses!"' },
+  'msg = ': { short: 'msg = Type()', note: '📦 Membuat objek pesan kosong. Setelah ini isi field-nya (msg.data = ...) lalu publish.', ana: 'Menyiapkan amplop kosong sebelum mengisi dan mengirim.' },
+  '.linear.x': { short: 'cmd.linear.x = nilai', note: '🤖 Field kecepatan linear sumbu X (maju/mundur). Positif = maju, negatif = mundur, satuan m/s.', ana: 'Pedal gas dan rem mobil.' },
+  '.angular.z': { short: 'cmd.angular.z = nilai', note: '🤖 Field kecepatan angular sumbu Z (rotasi). Positif = putar kiri, negatif = kanan, satuan rad/s.', ana: 'Setir mobil — putar kiri atau kanan.' },
+};
+
+function getCodeNote(lineText) {
+  const trim = lineText.trim();
+  for (const [pattern, note] of Object.entries(CODE_NOTES)) {
+    if (trim.includes(pattern)) return note;
+  }
+  return null;
+}
+
+function buildAnnotatedCode(code, filename) {
+  const lines = code.split('\n');
+  const linesHtml = lines.map((line, i) => {
+    const note = getCodeNote(line);
+    const hasNote = !!note;
+    const highlighted = syntaxHL(line);
+    return `<div class="anno-line${hasNote ? ' has-note' : ''}" onclick="toggleAnnoNote(this, ${i})" data-note-idx="${i}">
+      <span class="anno-ln">${i + 1}</span>
+      <span class="anno-code">${highlighted || '&nbsp;'}</span>
+      <span class="anno-icon">${hasNote ? '💬' : ''}</span>
+    </div>
+    ${hasNote ? `<div class="anno-explanation" id="anno-${i}">
+      <strong>${escapeHtml(note.short)}</strong><br>${note.note}
+      ${note.ana ? `<div class="anno-ana">💡 ${note.ana}</div>` : ''}
+    </div>` : ''}`;
+  }).join('');
+
+  return `<div class="anno-code-block">
+    ${linesHtml}
+    <div class="anno-hint-bar">💬 Klik baris yang ada icon untuk melihat penjelasannya</div>
+  </div>`;
+}
+
+function toggleAnnoNote(el, idx) {
+  const exp = document.getElementById('anno-' + idx);
+  if (!exp) return;
+  const isOpen = exp.classList.contains('show');
+  // Close all
+  document.querySelectorAll('.anno-explanation').forEach(e => e.classList.remove('show'));
+  document.querySelectorAll('.anno-line').forEach(e => e.classList.remove('active-note'));
+  if (!isOpen) {
+    exp.classList.add('show');
+    el.classList.add('active-note');
+  }
+}
+
+// ============================
+// RUN CODE — Anthropic API Simulation
+// ============================
+let runCooldown = false;
+let cooldownTimer = null;
+
+async function runCode() {
+  if (runCooldown) {
+    const termPanel = document.getElementById('terminalPanel');
+    const termBody = document.getElementById('terminalBody');
+    termPanel.classList.add('show');
+    termBody.innerHTML = `<div class="t-line"><span class="t-prefix">  </span><span class="t-text t-warn">⏳ Harap tunggu beberapa detik sebelum RUN lagi...</span></div>`;
+    return;
+  }
+  const code = document.getElementById('codeEditor').value.trim();
+  const runBtn = document.getElementById('runBtn');
+  const termPanel = document.getElementById('terminalPanel');
+  const termBody = document.getElementById('terminalBody');
+  const termRunning = document.getElementById('termRunning');
+
+  if (!code) {
+    termPanel.classList.add('show');
+    termBody.innerHTML = `<div class="t-line"><span class="t-prefix">$</span><span class="t-text t-err">⚠ Belum ada kode! Ketik dulu kode Python-mu di editor.</span></div>`;
+    return;
+  }
+
+  // Set loading state
+  runBtn.disabled = true;
+  runBtn.classList.add('running');
+  runBtn.textContent = '⏳ RUNNING...';
+  termPanel.classList.add('show');
+  termRunning.classList.add('show');
+  termBody.innerHTML = `<div class="t-line"><span class="t-prefix">$</span><span class="t-text t-sys">python3 ${TOPICS[state.currentTopic].practice.filename}</span></div>`;
+
+  const topic = TOPICS[state.currentTopic];
+
+  const prompt = `Kamu adalah Python interpreter dan ROS2 runtime simulator. 
+Tugasmu: eksekusi kode Python ROS2 berikut dan kembalikan output simulasi yang REALISTIS.
+
+KODE:
+\`\`\`python
+${code}
+\`\`\`
+
+KONTEKS TOPIK: ${topic.name} — ${topic.practice.title}
+
+Kembalikan HANYA JSON (tidak ada teks lain, tidak ada markdown, tidak ada backtick):
+{
+  "hasError": false/true,
+  "errorType": "SyntaxError" | "NameError" | "ImportError" | "AttributeError" | "IndentationError" | null,
+  "errorLine": nomor_baris_atau_null,
+  "errorCode": "baris kode yang error atau null",
+  "errorMessage": "pesan error Python yang realistis atau null",
+  "errorFix": "saran singkat cara memperbaiki dalam 1 kalimat bahasa Indonesia atau null",
+  "output": [
+    "baris output terminal 1",
+    "baris output terminal 2",
+    ...
+  ]
+}
+
+ATURAN SIMULASI OUTPUT (jika TIDAK ada error):
+- Mulai dengan baris startup ROS2: "[INFO] [timestamp] [nama_node]: Node started successfully"
+- Simulasikan output dari get_logger().info() / warn() / error() dengan format: "[INFO] [1.23456789] [nama_node]: pesan_logger"
+- Untuk node dengan timer: tampilkan 3-4 baris output timer berulang dengan timestamp berbeda
+- Untuk publisher: tampilkan pesan publish
+- Untuk service server: tampilkan "Service '/nama_srv' ready, waiting for requests..."
+- Untuk subscriber: simulasikan 1-2 pesan yang diterima
+- Akhiri dengan: "^C" dan "[INFO] shutting down..."
+- Format timestamp: angka float seperti 1706234567.123
+
+ATURAN ERROR (jika ADA error):
+- errorLine: nomor baris tepat di kode yang diberikan (hitung dari baris 1)
+- errorCode: copy persis baris kode yang bermasalah
+- errorMessage: pesan error Python yang realistic (contoh: "name 'rclpy' is not defined")
+- output: array kosong []
+- errorFix: saran konkret dalam bahasa Indonesia
+
+Deteksi error umum:
+- Indentasi salah (IndentationError)  
+- Import tidak ada/salah (ImportError/NameError)
+- Typo nama fungsi/method (AttributeError)
+- Syntax salah seperti kurung tidak tutup, titik dua kurang, dll (SyntaxError)
+- Kalau kode sudah benar ROS2, jangan buat error palsu
+
+Kembalikan HANYA JSON, tidak ada yang lain.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+
+    // Handle API-level errors
+    if (!response.ok) {
+      if (response.status === 429) {
+        throw new Error('RATE_LIMIT');
+      }
+      throw new Error(`API Error ${response.status}: ${data?.error?.message || response.statusText}`);
+    }
+    if (data.error) {
+      throw new Error(data.error.message || 'API mengembalikan error');
+    }
+    if (!data.content || !Array.isArray(data.content)) {
+      throw new Error('Response tidak valid dari API. Coba lagi.');
+    }
+
+    const raw = data.content.map(b => b.text || '').join('');
+    
+    // Strip any possible markdown fences
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const result = JSON.parse(clean);
+
+    termRunning.classList.remove('show');
+
+    if (result.hasError) {
+      // Show error output
+      let html = '';
+      html += `<div class="t-line"><span class="t-prefix">$</span><span class="t-text t-sys">python3 ${topic.practice.filename}</span></div>`;
+      html += `<div class="t-error-block">`;
+      html += `<div class="t-err-type">❌ ${result.errorType || 'Error'}</div>`;
+      if (result.errorLine) {
+        html += `<div>File "${topic.practice.filename}", line <strong style="color:#ff6b6b">${result.errorLine}</strong></div>`;
+        if (result.errorCode) {
+          html += `<div class="t-err-line">${escapeHtml(result.errorCode)}</div>`;
+        }
+      }
+      if (result.errorMessage) {
+        html += `<div style="margin-top:6px; color:#ff8080">${escapeHtml(result.errorType || 'Error')}: ${escapeHtml(result.errorMessage)}</div>`;
+      }
+      if (result.errorFix) {
+        html += `<div class="t-err-fix">💡 Perbaikan: ${escapeHtml(result.errorFix)}</div>`;
+      }
+      html += `</div>`;
+      html += `<div class="t-line" style="margin-top:4px"><span class="t-prefix">$</span><span class="t-text t-sys" style="color:#555">Program keluar dengan error. Perbaiki kode lalu coba lagi.</span></div>`;
+      termBody.innerHTML = html;
+    } else {
+      // Show successful output
+      let html = '';
+      const lines = result.output || [];
+      lines.forEach(line => {
+        let cls = 't-text';
+        if (line.includes('[WARN]') || line.includes('warn')) cls = 't-text t-warn';
+        else if (line.includes('[ERROR]') || line.includes('error')) cls = 't-text t-err';
+        else if (line.includes('^C') || line.includes('shutting down') || line.includes('shutdown')) cls = 't-text t-sys';
+        else if (line.includes('[INFO]')) cls = 't-text t-node';
+        else if (line.startsWith('$')) cls = 't-text t-info';
+        const prefix = line.startsWith('$') ? '' : '  ';
+        html += `<div class="t-line"><span class="t-prefix">${prefix}</span><span class="${cls}">${escapeHtml(line)}</span></div>`;
+      });
+      if (!lines.length) {
+        html = `<div class="t-line"><span class="t-prefix">  </span><span class="t-text t-sys">(Tidak ada output — program berjalan tanpa output terminal)</span></div>`;
+      }
+      html += `<div class="t-line" style="margin-top:6px"><span class="t-prefix">$</span><span class="t-text t-sys" style="color:#3a6e3a">▪ Program selesai</span></div>`;
+      termBody.innerHTML = html;
+      termBody.scrollTop = termBody.scrollHeight;
+    }
+  } catch (err) {
+    termRunning.classList.remove('show');
+    let errMsg = err.message || 'Unknown error';
+    let tip = 'Coba klik RUN lagi.';
+    if (errMsg === 'RATE_LIMIT') {
+      errMsg = 'Terlalu banyak request — API sedang dibatasi (Rate Limit 429)';
+      tip = 'Tunggu 30–60 detik lalu coba lagi. Ini normal jika kamu klik RUN berkali-kali cepat.';
+    } else if (errMsg.includes('401')) {
+      tip = 'API Key tidak valid. File harus dibuka di claude.ai atau lewat artifact.';
+    } else if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
+      tip = 'Tidak ada koneksi internet. Periksa koneksi lalu coba lagi.';
+    } else if (errMsg.includes('JSON')) {
+      tip = 'Response API tidak bisa dibaca. Coba lagi.';
+    }
+    termBody.innerHTML = `
+      <div class="t-line"><span class="t-prefix">  </span><span class="t-text t-err">❌ ${escapeHtml(errMsg)}</span></div>
+      <div class="t-line"><span class="t-prefix">  </span><span class="t-text t-warn">💡 ${tip}</span></div>`;
+  } finally {
+    runBtn.disabled = false;
+    runBtn.classList.remove('running');
+    runBtn.textContent = '▶ RUN';
+    // Start cooldown: disable RUN for 15 seconds
+    runCooldown = true;
+    let secs = 15;
+    runBtn.textContent = `⏳ ${secs}s`;
+    runBtn.disabled = true;
+    cooldownTimer = setInterval(() => {
+      secs--;
+      if (secs <= 0) {
+        clearInterval(cooldownTimer);
+        runCooldown = false;
+        runBtn.disabled = false;
+        runBtn.textContent = '▶ RUN';
+      } else {
+        runBtn.textContent = `⏳ ${secs}s`;
+      }
+    }, 1000);
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ============================
+// CODE CHECK
+// ============================
+function checkCode() {
+  const code = document.getElementById('codeEditor').value.trim();
+  if (!code) {
+    showFeedback('warning', '⚠️ Belum ada kode! Ketik dulu kode Python-mu.');
+    return;
+  }
+  state.attempts++;
+  document.getElementById('statAttempts').textContent = state.attempts;
+
+  const topic = TOPICS[state.currentTopic];
+  const checks = topic.practice.checks;
+  const results = checks.map(c => ({ label: c.label, pass: c.test(code) }));
+  const passCount = results.filter(r => r.pass).length;
+  const total = results.length;
+
+  // Render checklist
+  const cl = document.getElementById('checklist');
+  cl.innerHTML = results.map(r =>
+    `<li class="${r.pass ? 'ok' : 'fail'}">${r.label}</li>`
+  ).join('');
+
+  if (passCount === total) {
+    // ALL PASS!
+    if (!state.topicsDone.includes(topic.id)) {
+      state.topicsDone.push(topic.id);
+      state.score += topic.points;
+    }
+    showFeedback('correct', `✅ <strong>LUAR BIASA!</strong> Semua ${total} pemeriksaan berhasil!<br>Kode kamu benar dan sesuai standar ROS2!`);
+    setTimeout(() => {
+      state.phase = 'result';
+      render();
+    }, 2000);
+  } else {
+    const failed = results.filter(r => !r.pass);
+    let errMsg = `❌ <strong>${passCount}/${total} pemeriksaan berhasil.</strong> Ada ${failed.length} yang perlu diperbaiki:<br>`;
+    const errDetail = document.createElement('div');
+    errDetail.className = 'error-detail';
+    failed.forEach(f => {
+      errMsg += `<br>`;
+    });
+    const hints = failed.slice(0, 2).map(f => getSuggestion(f.label, topic)).join('<br>');
+    showFeedback('wrong', 
+      `❌ <strong>${passCount}/${total} pemeriksaan berhasil.</strong> ${failed.length} item perlu diperbaiki.<br><br>
+      <strong>💡 Saran perbaikan:</strong><br>${hints}`
+    );
+  }
+}
+
+function getSuggestion(label, topic) {
+  const suggestions = {
+    "import rclpy & Node": "Pastikan ada: <code>import rclpy</code> dan <code>from rclpy.node import Node</code>",
+    "import rclpy": "Tambahkan: <code>import rclpy</code> di baris pertama",
+    "Class inherit dari Node": "Buat class dengan format: <code>class NamaClass(Node):</code>",
+    "rclpy.spin() dipanggil": "Tambahkan <code>rclpy.spin(node)</code> di fungsi main()",
+    "get_logger().info() dipanggil": "Gunakan <code>self.get_logger().info('pesanmu')</code>",
+    "return response di callback": "Jangan lupa <code>return response</code> di akhir callback service!",
+    "goal_handle.succeed() dipanggil": "Sebelum return result, panggil <code>goal_handle.succeed()</code>",
+  };
+  return suggestions[label] || `Periksa bagian: <strong>${label}</strong>`;
+}
+
+function showFeedback(type, msg) {
+  const box = document.getElementById('feedbackBox');
+  box.className = `feedback-box feedback-${type} show`;
+  box.innerHTML = msg;
+}
+
+// ============================
+// EDITOR HELPERS
+// ============================
+function updateLines() {
+  const ta = document.getElementById('codeEditor');
+  if (!ta) return;
+  const lines = ta.value.split('\n').length;
+  // Build numbers as newline-separated string (white-space:pre renders them vertically)
+  const nums = Array.from({length: lines}, (_, i) => i + 1).join('\n');
+  const ln = document.getElementById('lineNums');
+  if (ln) {
+    ln.textContent = nums;
+    // Sync scroll with textarea
+    ln.scrollTop = ta.scrollTop;
+  }
+}
+
+function handleTab(e) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const ta = e.target;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    ta.value = ta.value.substring(0, start) + '    ' + ta.value.substring(end);
+    ta.selectionStart = ta.selectionEnd = start + 4;
+    updateLines();
+  }
+}
+
+function resetEditor() {
+  const ta = document.getElementById('codeEditor');
+  if (ta) ta.value = '';
+  const fb = document.getElementById('feedbackBox');
+  if (fb) { fb.className = 'feedback-box'; fb.innerHTML = ''; }
+  const cl = document.getElementById('checklist');
+  if (cl) cl.innerHTML = '';
+  const tp = document.getElementById('terminalPanel');
+  if (tp) tp.classList.remove('show');
+  updateLines();
+}
+
+function syncScroll() {
+  const ta = document.getElementById('codeEditor');
+  const ln = document.getElementById('lineNums');
+  if (ta && ln) ln.scrollTop = ta.scrollTop;
+}
+
+function toggleHint() {
+  const h = document.getElementById('hintContent');
+  h.classList.toggle('show');
+}
+
+// ============================
+// SYNTAX HIGHLIGHT (safe, step-by-step on plain text)
+// ============================
+function syntaxHL(code) {
+  // Work on plain text, build token list, then assemble HTML at end
+  const KEYWORDS = /\b(import|from|class|def|return|if|else|elif|for|while|in|not|and|or|True|False|None|self|lambda|with|as|pass|raise|try|except|finally)\b/g;
+  const BUILTINS = /\b(rclpy|Node|ActionServer|ActionClient|String|Float64|LaserScan|Imu|Twist|SetBool|Fibonacci|super|print|len|min|max|range|int|float|str|bool|list)\b/g;
+
+  // Tokenize line by line to avoid cross-line issues
+  const lines = code.split('\n');
+  const htmlLines = lines.map(line => {
+    // Segments: [{text, type}]  type = 'comment'|'string'|'kw'|'builtin'|'num'|'plain'
+    const segments = [];
+    let i = 0;
+
+    while (i < line.length) {
+      // Comment
+      if (line[i] === '#') {
+        segments.push({ text: line.slice(i), type: 'comment' });
+        i = line.length;
+        continue;
+      }
+      // String: single or double quoted
+      if (line[i] === '"' || line[i] === "'") {
+        const q = line[i];
+        let j = i + 1;
+        while (j < line.length) {
+          if (line[j] === '\\') { j += 2; continue; }
+          if (line[j] === q) { j++; break; }
+          j++;
+        }
+        segments.push({ text: line.slice(i, j), type: 'string' });
+        i = j;
+        continue;
+      }
+      // Otherwise collect a "word" or single char
+      // Try to grab a token (word chars)
+      const wordMatch = line.slice(i).match(/^[A-Za-z_]\w*/);
+      if (wordMatch) {
+        const w = wordMatch[0];
+        const kwList = ['import','from','class','def','return','if','else','elif','for','while','in','not','and','or','True','False','None','self','lambda','with','as','pass','raise','try','except','finally'];
+        const builtinList = ['rclpy','Node','ActionServer','ActionClient','String','Float64','LaserScan','Imu','Twist','SetBool','Fibonacci','super','print','len','min','max','range','int','float','str','bool','list'];
+        if (kwList.includes(w)) segments.push({ text: w, type: 'kw' });
+        else if (builtinList.includes(w)) segments.push({ text: w, type: 'builtin' });
+        else segments.push({ text: w, type: 'plain' });
+        i += w.length;
+        continue;
+      }
+      // Number
+      const numMatch = line.slice(i).match(/^\d+\.?\d*/);
+      if (numMatch) {
+        segments.push({ text: numMatch[0], type: 'num' });
+        i += numMatch[0].length;
+        continue;
+      }
+      // Single char
+      segments.push({ text: line[i], type: 'plain' });
+      i++;
+    }
+
+    // Build HTML from segments
+    return segments.map(s => {
+      const esc = s.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      if (s.type === 'comment')  return `<span style="color:#5c6370;font-style:italic">${esc}</span>`;
+      if (s.type === 'string')   return `<span style="color:#98c379">${esc}</span>`;
+      if (s.type === 'kw')       return `<span style="color:#c678dd">${esc}</span>`;
+      if (s.type === 'builtin')  return `<span style="color:#61afef">${esc}</span>`;
+      if (s.type === 'num')      return `<span style="color:#e5c07b">${esc}</span>`;
+      return esc;
+    }).join('');
+  });
+
+  return htmlLines.join('\n');
+}
+
+// ============================
+// SCORE POP
+// ============================
+function showFinal() {
+  const pop = document.getElementById('scorePop');
+  const ov = document.getElementById('overlay');
+  document.getElementById('scorePopTitle').textContent = '🏆 SELESAI!';
+  document.getElementById('scorePopMsg').innerHTML = `
+    Score: ${state.score} / ${TOPICS.length * 100} pts<br>
+    <span style="font-size:0.8rem; color:var(--muted)">Kamu telah menguasai semua konsep ROS2 dasar!</span>`;
+  pop.classList.add('show');
+  ov.classList.add('show');
+}
+
+function closeScorePop() {
+  document.getElementById('scorePop').classList.remove('show');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+// ============================
+// INIT
+// ============================
+render();
+setInfoPanel(true); // Start on explain phase
+</script>
+</body>
+</html>
